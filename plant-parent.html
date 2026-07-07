@@ -589,6 +589,42 @@
     backdrop-filter: blur(4px);
   }
 
+  /* ===================== DEX VIEW ===================== */
+  .dex-summary {
+    background: linear-gradient(135deg, var(--plant-deep), var(--plant-mid));
+    color: var(--bg-cream);
+    border-radius: 16px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .dex-summary .dex-lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.85; }
+  .dex-summary .dex-big { font-size: 26px; font-weight: 800; line-height: 1.2; }
+  .dex-summary .dex-pct { font-size: 22px; font-weight: 800; }
+  .dex-chips { display: flex; gap: 8px; margin-top: 10px; font-size: 12px; }
+  .dex-chip { background: rgba(255,255,255,0.15); padding: 4px 10px; border-radius: 999px; font-weight: 600; }
+  .dex-sec { display: flex; align-items: center; gap: 8px; margin: 18px 0 10px; }
+  .dex-sec-count { font-size: 12px; color: var(--ink-soft); font-weight: 700; }
+  .dex-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .dex-tile {
+    background: var(--bg-cream);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 10px 6px 8px;
+    text-align: center;
+    cursor: pointer;
+    transition: transform 0.12s;
+  }
+  .dex-tile:active { transform: scale(0.95); }
+  .dex-tile.found { border-color: var(--plant-soft); }
+  .dex-tile .dex-emoji { font-size: 26px; display: block; line-height: 1.2; }
+  .dex-tile .dex-emoji.shadow { filter: brightness(0) opacity(0.22); }
+  .dex-tile .dex-name {
+    font-size: 10.5px; font-weight: 600; margin-top: 4px; line-height: 1.25;
+    min-height: 26px; color: var(--ink);
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .dex-tile:not(.found) .dex-name { color: var(--muted); }
+
   /* ===================== MAP VIEW ===================== */
   #map {
     width: 100%;
@@ -1017,6 +1053,32 @@
     <div class="collection-grid" id="collectionGrid"></div>
   </section>
 
+  <!-- ============= DEX VIEW ============= -->
+  <section class="view" id="view-dex">
+    <div class="dex-summary">
+      <div style="display:flex; justify-content:space-between; align-items:baseline;">
+        <div>
+          <div class="dex-lbl">Species discovered</div>
+          <div class="dex-big" id="dexTotal">0/66</div>
+        </div>
+        <div class="dex-pct" id="dexPct">0%</div>
+      </div>
+      <div class="xp-bar"><div class="xp-fill" id="dexFill" style="width:0%"></div></div>
+      <div class="dex-chips">
+        <span class="dex-chip">🌿 <span id="dexPlants">0/43</span></span>
+        <span class="dex-chip">🍄 <span id="dexFungi">0/23</span></span>
+      </div>
+    </div>
+
+    <div class="tabs" id="dexTabs">
+      <button class="tab active" data-kingdom="all">All</button>
+      <button class="tab" data-kingdom="plant">🌿 Plants</button>
+      <button class="tab" data-kingdom="fungi">🍄 Fungi</button>
+    </div>
+
+    <div id="dexGrid"></div>
+  </section>
+
   <!-- ============= MAP VIEW ============= -->
   <section class="view" id="view-map">
     <div class="map-legend">
@@ -1055,6 +1117,7 @@
   <nav class="bottom-nav">
     <button class="nav-btn active" data-view="discover"><span class="icon">📸</span><span>Discover</span></button>
     <button class="nav-btn" data-view="collection"><span class="icon">📔</span><span>Collection</span></button>
+    <button class="nav-btn" data-view="dex"><span class="icon">📖</span><span>Dex</span></button>
     <button class="nav-btn" data-view="map"><span class="icon">🗺️</span><span>Map</span></button>
     <button class="nav-btn" data-view="profile"><span class="icon">👤</span><span>Profile</span></button>
   </nav>
@@ -1474,9 +1537,96 @@ function switchView(view) {
   $('#view-' + view).classList.add('active');
   $$(`.nav-btn[data-view="${view}"]`).forEach(n => n.classList.add('active'));
   if (view === 'collection') renderCollection();
+  if (view === 'dex') renderDex();
   if (view === 'profile') renderProfile();
   if (view === 'map') setTimeout(initOrUpdateMap, 50);
   if (view === 'discover') renderRecent();
+}
+window.switchView = switchView; // used by inline onclick in dynamically-injected modal HTML
+
+/* ============= DEX VIEW ============= */
+// The Dex tracks the static species table: every entry renders as a
+// silhouette until a discovery carries its speciesId. Ad-hoc species from
+// iNat/Claude (ids like 'inat-*'/'ai-*') live in the collection but aren't
+// Dex slots — the Dex is a bounded, completable set by design.
+const RARITY_ORDER = ['common', 'uncommon', 'rare', 'legendary'];
+let dexKingdom = 'all';
+
+$$('#dexTabs .tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    $$('#dexTabs .tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    dexKingdom = tab.dataset.kingdom;
+    $('#view-dex').classList.toggle('fungi-theme', dexKingdom === 'fungi');
+    renderDex();
+  });
+});
+
+function foundSpeciesSet() {
+  return new Set(state.discoveries.map(d => d.speciesId));
+}
+
+function renderDex() {
+  const found = foundSpeciesSet();
+  const plants = SPECIES.filter(s => s.kingdom === 'plant');
+  const fungi = SPECIES.filter(s => s.kingdom === 'fungi');
+  const totalFound = SPECIES.filter(s => found.has(s.id)).length;
+
+  $('#dexTotal').textContent = `${totalFound}/${SPECIES.length}`;
+  $('#dexPlants').textContent = `${plants.filter(s => found.has(s.id)).length}/${plants.length}`;
+  $('#dexFungi').textContent = `${fungi.filter(s => found.has(s.id)).length}/${fungi.length}`;
+  const pct = Math.round((totalFound / SPECIES.length) * 100);
+  $('#dexPct').textContent = pct + '%';
+  $('#dexFill').style.width = pct + '%';
+
+  const pool = dexKingdom === 'all' ? SPECIES : SPECIES.filter(s => s.kingdom === dexKingdom);
+  let html = '';
+  for (const rarity of RARITY_ORDER) {
+    const group = pool.filter(s => s.rarity === rarity);
+    if (!group.length) continue;
+    const got = group.filter(s => found.has(s.id)).length;
+    html += `<div class="dex-sec">
+      <span class="rarity-tag rarity-${rarity}" style="font-size:10px; padding:2px 8px; border-radius:999px;">${RARITY[rarity].label}</span>
+      <span class="dex-sec-count">${got}/${group.length}</span>
+    </div>`;
+    html += '<div class="dex-grid">';
+    for (const s of group) {
+      const isFound = found.has(s.id);
+      html += `<div class="dex-tile ${isFound ? 'found' : ''}" data-sid="${s.id}">
+        <span class="dex-emoji ${isFound ? '' : 'shadow'}">${s.emoji}</span>
+        <div class="dex-name">${isFound ? s.name : '???'}</div>
+      </div>`;
+    }
+    html += '</div>';
+  }
+  $('#dexGrid').innerHTML = html;
+  $$('#dexGrid .dex-tile').forEach(t => {
+    t.addEventListener('click', () => showDexEntry(t.dataset.sid));
+  });
+}
+
+function showDexEntry(speciesId) {
+  const s = SPECIES.find(x => x.id === speciesId);
+  if (!s) return;
+  const mine = state.discoveries.filter(d => d.speciesId === speciesId).sort((a, b) => b.ts - a.ts);
+  if (mine.length) return showDetail(mine[0].id); // most recent find of this species
+
+  // Unfound: a mystery card — kingdom and rarity only, never the name
+  openModal(`
+    <h2><span style="filter:brightness(0) opacity(0.25)">${s.emoji}</span> ???</h2>
+    <p class="lead">An undiscovered ${s.kingdom === 'fungi' ? 'fungus' : 'plant'}.</p>
+    <div class="result-meta">
+      <div class="meta-item"><div class="meta-lbl">Kingdom</div><div class="meta-val">${s.kingdom === 'fungi' ? 'Fungi' : 'Plantae'}</div></div>
+      <div class="meta-item"><div class="meta-lbl">Rarity</div><div class="meta-val">${RARITY[s.rarity].label}</div></div>
+    </div>
+    <p style="font-size:13px; color:var(--ink-soft); margin-top:14px;">${
+      s.rarity === 'legendary' ? 'A once-in-a-lifetime find. Intact, remote habitat is your best chance.'
+      : s.rarity === 'rare' ? 'Rare species favour intact habitat — national parks and reserves.'
+      : s.rarity === 'uncommon' ? 'Seasonal or regional — the right place at the right time.'
+      : 'Common in the wild. This one is out there waiting.'}</p>
+    <button class="btn" onclick="closeModal(); switchView('discover')">Go hunting</button>
+    <button class="btn secondary" onclick="closeModal()" style="margin-top:8px">Close</button>
+  `);
 }
 
 /* ============= IDENTIFICATION FLOW ============= */
@@ -2830,6 +2980,7 @@ function deleteDiscovery(id) {
   closeModal();
   renderCollection();
   renderRecent();
+  if ($('#view-dex').classList.contains('active')) renderDex(); // detail modal can be opened from the Dex
   updateHeader();
   showToast('Removed from collection');
   // Fire-and-forget cloud delete if signed in
