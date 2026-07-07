@@ -1,0 +1,2596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#2d4a2b" />
+<title>Plant Parent — A treasure hunt for Australian native flora & fungi</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  /* ===================== DESIGN TOKENS ===================== */
+  :root {
+    /* Plant palette — muted greens, ochres, sandstone */
+    --plant-deep: #2d4a2b;
+    --plant-mid: #4a6741;
+    --plant-soft: #6b8e5a;
+    --plant-light: #8fa978;
+    --plant-mist: #c4d3b8;
+
+    /* Fungus palette — browns and rust */
+    --fungus-deep: #3d2817;
+    --fungus-mid: #5d3f2c;
+    --fungus-soft: #7a5a3a;
+    --rust: #a0522d;
+    --rust-bright: #b85c38;
+    --fungus-mist: #d8c3a8;
+
+    /* Earthy neutrals */
+    --ochre: #c9974a;
+    --ochre-deep: #a07832;
+    --sandstone: #d4c5a9;
+    --bg-cream: #f5f0e6;
+    --bg-paper: #fbf7ee;
+    --ink: #2a2520;
+    --ink-soft: #5a4f44;
+    --muted: #9a8c78;
+    --line: rgba(0,0,0,0.08);
+
+    /* Rarity */
+    --common: #8fa978;
+    --uncommon: #4a8f5d;
+    --rare: #c9974a;
+    --legendary: #b85c38;
+
+    /* Layout */
+    --nav-height: 72px;
+    --header-height: 56px;
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-top: env(safe-area-inset-top, 0px);
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; height: 100%; overscroll-behavior-y: none; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg-cream);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.5;
+  }
+
+  /* ===================== APP SHELL ===================== */
+  #app {
+    max-width: 480px;
+    margin: 0 auto;
+    min-height: 100vh;
+    background: var(--bg-paper);
+    position: relative;
+    box-shadow: 0 0 40px rgba(0,0,0,0.04);
+    padding-bottom: calc(var(--nav-height) + var(--safe-bottom));
+  }
+
+  header.app-header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: linear-gradient(180deg, var(--plant-deep), var(--plant-mid));
+    color: var(--bg-cream);
+    padding: calc(var(--safe-top) + 12px) 16px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+    font-size: 18px;
+    letter-spacing: 0.3px;
+  }
+  .logo-icon {
+    width: 32px; height: 32px;
+    background: var(--ochre);
+    border-radius: 50%;
+    display: grid; place-items: center;
+    color: var(--plant-deep);
+    font-size: 18px;
+  }
+  .tier-pill {
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.25);
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .ai-pill {
+    background: var(--ochre);
+    color: var(--plant-deep);
+    padding: 4px 8px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+  .sync-pill {
+    background: var(--plant-light);
+    color: var(--plant-deep);
+    padding: 4px 8px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+  .sync-pill.syncing { background: var(--ochre); animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+
+  .settings-section {
+    background: var(--bg-cream);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 14px;
+  }
+  .settings-section h3 {
+    margin: 0 0 4px;
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .settings-section p.help {
+    margin: 0 0 12px;
+    font-size: 12px;
+    color: var(--ink-soft);
+  }
+  details.sql-help {
+    margin-top: 10px;
+    background: rgba(45,74,43,0.06);
+    border-radius: 8px;
+    padding: 10px;
+  }
+  details.sql-help summary {
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--plant-deep);
+  }
+  details.sql-help pre {
+    background: var(--ink);
+    color: #d4e0c8;
+    padding: 12px;
+    border-radius: 8px;
+    overflow-x: auto;
+    font-size: 11px;
+    line-height: 1.5;
+    margin: 8px 0 0;
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  }
+  .copy-btn {
+    background: var(--plant-mid);
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 8px;
+  }
+  .signed-in-banner {
+    background: rgba(74,143,93,0.15);
+    border: 1px solid var(--uncommon);
+    color: var(--uncommon);
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .signed-in-banner .who { font-weight: 700; color: var(--plant-deep); }
+  .icon-btn {
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.25);
+    color: var(--bg-cream);
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    display: grid; place-items: center;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background 0.2s;
+  }
+  .icon-btn:active { background: rgba(255,255,255,0.3); }
+
+  /* Settings form */
+  .settings-form { display: flex; flex-direction: column; gap: 14px; }
+  .settings-form label { font-size: 13px; font-weight: 600; color: var(--ink); }
+  .settings-form input[type="password"],
+  .settings-form input[type="text"] {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    font-size: 14px;
+    font-family: inherit;
+    background: white;
+    box-sizing: border-box;
+  }
+  .settings-form input:focus { outline: none; border-color: var(--plant-mid); }
+  .toggle-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    border-top: 1px solid var(--line);
+  }
+  .toggle-row .lbl { font-size: 14px; font-weight: 600; }
+  .toggle-row .desc { font-size: 12px; color: var(--ink-soft); margin-top: 2px; }
+  .switch {
+    position: relative;
+    width: 44px; height: 26px;
+    background: var(--sandstone);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.2s;
+    flex-shrink: 0;
+  }
+  .switch::after {
+    content: '';
+    position: absolute;
+    top: 3px; left: 3px;
+    width: 20px; height: 20px;
+    background: white;
+    border-radius: 50%;
+    transition: transform 0.2s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  }
+  .switch.on { background: var(--plant-mid); }
+  .switch.on::after { transform: translateX(18px); }
+
+  .key-status {
+    font-size: 11px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    margin-top: 4px;
+  }
+  .key-status.ok { background: rgba(74,143,93,0.15); color: var(--uncommon); }
+  .key-status.warn { background: rgba(201,151,74,0.15); color: var(--ochre-deep); }
+
+  /* ===================== VIEWS ===================== */
+  .view { display: none; padding: 16px; min-height: calc(100vh - var(--header-height) - var(--nav-height) - 40px); }
+  .view.active { display: block; }
+
+  /* ===================== BOTTOM NAV ===================== */
+  nav.bottom-nav {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: calc(var(--nav-height) + var(--safe-bottom));
+    padding-bottom: var(--safe-bottom);
+    background: var(--bg-paper);
+    border-top: 1px solid var(--line);
+    display: flex;
+    z-index: 100;
+    max-width: 480px;
+    margin: 0 auto;
+    box-shadow: 0 -2px 12px rgba(0,0,0,0.06);
+  }
+  .nav-btn {
+    flex: 1;
+    background: none;
+    border: none;
+    color: var(--muted);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 8px 4px;
+    transition: color 0.2s;
+  }
+  .nav-btn .icon { font-size: 22px; line-height: 1; }
+  .nav-btn.active { color: var(--plant-mid); }
+  .nav-btn.active .icon { transform: translateY(-2px); }
+
+  /* ===================== DISCOVER VIEW ===================== */
+  .hero {
+    background: linear-gradient(135deg, var(--plant-mid), var(--plant-soft));
+    color: var(--bg-cream);
+    border-radius: 20px;
+    padding: 24px;
+    margin-bottom: 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: -40px; right: -40px;
+    width: 160px; height: 160px;
+    background: radial-gradient(circle, var(--ochre) 0%, transparent 70%);
+    opacity: 0.4;
+  }
+  .hero h1 {
+    margin: 0 0 6px;
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1.2;
+    position: relative;
+  }
+  .hero p {
+    margin: 0;
+    opacity: 0.92;
+    font-size: 14px;
+    position: relative;
+  }
+
+  .discover-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .discover-actions--single {
+    grid-template-columns: 1fr;
+  }
+  .discover-actions--single .action-card {
+    padding: 28px 16px;
+  }
+  .discover-actions--single .action-card .ico {
+    font-size: 44px;
+  }
+  .field-note {
+    text-align: center;
+    color: var(--ink-soft);
+    font-size: 12px;
+    margin: 0 0 24px;
+    padding: 0 8px;
+    line-height: 1.5;
+  }
+  .action-card {
+    background: var(--bg-cream);
+    border: 2px solid var(--sandstone);
+    border-radius: 16px;
+    padding: 20px 16px;
+    text-align: center;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+    font-family: inherit;
+    color: inherit;
+    width: 100%;
+    display: block;
+  }
+  .action-card:active { transform: scale(0.97); }
+  .action-card.primary {
+    background: var(--plant-deep);
+    color: var(--bg-cream);
+    border-color: var(--plant-deep);
+    box-shadow: 0 4px 12px rgba(45,74,43,0.25);
+  }
+  .action-card .ico { font-size: 36px; margin-bottom: 6px; display: block; }
+  .action-card .label { font-size: 14px; font-weight: 600; }
+  .action-card .sub { font-size: 11px; opacity: 0.7; margin-top: 2px; }
+
+  .section-title {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--ink-soft);
+    margin: 8px 0 12px;
+  }
+
+  .recent-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  .recent-tile {
+    aspect-ratio: 1;
+    border-radius: 12px;
+    background: var(--sandstone);
+    background-size: cover;
+    background-position: center;
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+  }
+  .recent-tile .rarity-dot {
+    position: absolute;
+    top: 6px; right: 6px;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    box-shadow: 0 0 0 2px white;
+  }
+  .recent-tile.empty {
+    border: 2px dashed var(--sandstone);
+    background: transparent;
+    display: grid;
+    place-items: center;
+    color: var(--muted);
+    font-size: 24px;
+  }
+
+  /* ===================== COLLECTION VIEW ===================== */
+  .tabs {
+    display: flex;
+    background: var(--bg-cream);
+    border-radius: 12px;
+    padding: 4px;
+    margin-bottom: 16px;
+    border: 1px solid var(--line);
+  }
+  .tab {
+    flex: 1;
+    background: none;
+    border: none;
+    padding: 10px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink-soft);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .tab.active {
+    background: var(--plant-mid);
+    color: var(--bg-cream);
+  }
+  .tab[data-kingdom="fungi"].active { background: var(--fungus-mid); }
+
+  .stats-bar {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .stat-chip {
+    background: var(--bg-cream);
+    border-radius: 10px;
+    padding: 10px;
+    text-align: center;
+    border: 1px solid var(--line);
+  }
+  .stat-chip .num { font-size: 18px; font-weight: 700; color: var(--plant-deep); }
+  .stat-chip .lbl { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--ink-soft); margin-top: 2px; }
+
+  .collection-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    grid-auto-rows: 1fr;
+  }
+  .collection-card, .empty-slot {
+    border-radius: 14px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .collection-card {
+    background: var(--bg-cream);
+    border: 1px solid var(--line);
+    cursor: pointer;
+    transition: transform 0.15s;
+  }
+  .collection-card:active { transform: scale(0.97); }
+  .collection-card .photo,
+  .empty-slot .photo {
+    width: 100%;
+    aspect-ratio: 1;
+    background-size: cover;
+    background-position: center;
+    position: relative;
+    flex-shrink: 0;
+  }
+  .collection-card .photo { background-color: var(--sandstone); }
+  .collection-card .info,
+  .empty-slot .info {
+    padding: 10px 12px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 84px;
+  }
+  .collection-card .info { justify-content: flex-start; gap: 2px; }
+  .collection-card .name {
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.25;
+    color: var(--ink);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .collection-card .sci {
+    font-size: 11px;
+    color: var(--muted);
+    font-style: italic;
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .collection-card .rarity-tag {
+    align-self: flex-start;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 999px;
+    margin-top: auto;
+    letter-spacing: 0.5px;
+  }
+
+  .empty-slot {
+    background: transparent;
+    border: 2px dashed var(--sandstone);
+  }
+  .empty-slot .photo {
+    display: grid;
+    place-items: center;
+    background-color: rgba(212,197,169,0.15);
+  }
+  .empty-slot .silhouette {
+    font-size: 36px;
+    opacity: 0.35;
+  }
+  .empty-slot .info {
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  /* ===================== RARITY COLORS ===================== */
+  .rarity-common { background: var(--common); color: white; }
+  .rarity-uncommon { background: var(--uncommon); color: white; }
+  .rarity-rare { background: var(--rare); color: var(--ink); }
+  .rarity-legendary {
+    background: linear-gradient(45deg, var(--legendary), var(--ochre));
+    color: white;
+    box-shadow: 0 0 8px rgba(184,92,56,0.4);
+  }
+  .dot-common { background: var(--common); }
+  .dot-uncommon { background: var(--uncommon); }
+  .dot-rare { background: var(--rare); }
+  .dot-legendary { background: var(--legendary); }
+
+  /* Kingdom indicator on collection cards */
+  .kingdom-badge {
+    position: absolute;
+    bottom: 6px; left: 6px;
+    background: rgba(0,0,0,0.65);
+    color: white;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 999px;
+    backdrop-filter: blur(4px);
+  }
+
+  /* ===================== MAP VIEW ===================== */
+  #map {
+    width: 100%;
+    height: calc(100vh - var(--header-height) - var(--nav-height) - 80px);
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid var(--line);
+  }
+  .map-legend {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 12px;
+    font-size: 12px;
+  }
+  .map-legend .leg-item { display: flex; align-items: center; gap: 6px; color: var(--ink-soft); }
+  .map-legend .leg-dot {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    display: grid; place-items: center;
+    font-size: 11px;
+    color: white;
+  }
+
+  /* ===================== PROFILE VIEW ===================== */
+  .level-card {
+    background: linear-gradient(135deg, var(--ochre) 0%, var(--rust) 100%);
+    color: white;
+    border-radius: 18px;
+    padding: 20px;
+    margin-bottom: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+  .level-card::after {
+    content: '';
+    position: absolute;
+    bottom: -30px; right: -30px;
+    width: 120px; height: 120px;
+    background: radial-gradient(circle, rgba(255,255,255,0.2) 0%, transparent 70%);
+  }
+  .level-card .lvl-num { font-size: 36px; font-weight: 800; line-height: 1; }
+  .level-card .lvl-lbl { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.9; }
+  .xp-bar {
+    background: rgba(0,0,0,0.2);
+    height: 8px;
+    border-radius: 999px;
+    margin-top: 12px;
+    overflow: hidden;
+  }
+  .xp-fill {
+    height: 100%;
+    background: white;
+    border-radius: 999px;
+    transition: width 0.5s;
+  }
+  .xp-text {
+    font-size: 11px;
+    margin-top: 6px;
+    opacity: 0.95;
+    display: flex; justify-content: space-between;
+  }
+
+  .badges-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+  .badge {
+    background: var(--bg-cream);
+    border-radius: 12px;
+    padding: 14px 12px;
+    text-align: center;
+    border: 1px solid var(--line);
+    position: relative;
+  }
+  .badge.locked {
+    opacity: 0.45;
+    filter: grayscale(0.6);
+  }
+  .badge .b-icon { font-size: 32px; display: block; margin-bottom: 4px; }
+  .badge .b-name { font-size: 12px; font-weight: 700; }
+  .badge .b-desc { font-size: 10px; color: var(--ink-soft); margin-top: 2px; line-height: 1.3; }
+
+  .freemium-card {
+    background: var(--sandstone);
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .freemium-card .fm-title {
+    font-weight: 700;
+    font-size: 14px;
+    margin-bottom: 8px;
+    color: var(--fungus-deep);
+  }
+  .freemium-progress {
+    background: rgba(0,0,0,0.1);
+    height: 8px;
+    border-radius: 999px;
+    overflow: hidden;
+    margin-bottom: 6px;
+  }
+  .freemium-progress-fill {
+    height: 100%;
+    background: var(--rust);
+    border-radius: 999px;
+    transition: width 0.4s;
+  }
+  .freemium-card .fm-meta {
+    font-size: 11px;
+    color: var(--ink-soft);
+    display: flex; justify-content: space-between;
+  }
+
+  /* ===================== BUTTONS ===================== */
+  button.btn {
+    background: var(--plant-deep);
+    color: white;
+    border: none;
+    padding: 14px 22px;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    width: 100%;
+    transition: opacity 0.2s, transform 0.1s;
+    font-family: inherit;
+  }
+  button.btn:active { transform: scale(0.98); }
+  button.btn.secondary { background: var(--bg-cream); color: var(--ink); border: 1px solid var(--line); }
+  button.btn.warning { background: var(--rust); }
+  button.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* ===================== MODAL ===================== */
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(20,15,5,0.6);
+    display: none;
+    align-items: flex-end;
+    justify-content: center;
+    z-index: 200;
+    backdrop-filter: blur(6px);
+  }
+  .modal-backdrop.show { display: flex; animation: fadeIn 0.2s; }
+  @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+  @keyframes slideUp { from { transform: translateY(40px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }
+
+  .modal {
+    background: var(--bg-paper);
+    width: 100%;
+    max-width: 480px;
+    max-height: 92vh;
+    overflow-y: auto;
+    border-radius: 24px 24px 0 0;
+    padding: 24px 20px calc(24px + var(--safe-bottom));
+    animation: slideUp 0.3s;
+  }
+  .modal-handle {
+    width: 40px;
+    height: 4px;
+    background: var(--sandstone);
+    border-radius: 999px;
+    margin: -8px auto 16px;
+  }
+  .modal h2 { margin: 0 0 8px; font-size: 22px; }
+  .modal p.lead { color: var(--ink-soft); margin: 0 0 16px; font-size: 14px; }
+  .modal .close-btn {
+    position: absolute; top: 16px; right: 16px;
+    background: rgba(0,0,0,0.05);
+    border: none;
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    font-size: 18px;
+    cursor: pointer;
+    color: var(--ink-soft);
+  }
+
+  /* ===================== ID FLOW ===================== */
+  .id-photo-preview {
+    width: 100%;
+    aspect-ratio: 1;
+    background: var(--sandstone);
+    background-size: cover;
+    background-position: center;
+    border-radius: 16px;
+    margin-bottom: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+  .id-photo-preview .scan-overlay {
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, transparent, rgba(74,103,65,0.3));
+    display: grid; place-items: center;
+    color: white;
+    font-weight: 600;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+  }
+  .scanner-line {
+    position: absolute;
+    left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, transparent, var(--ochre), transparent);
+    animation: scan 2s ease-in-out infinite;
+    box-shadow: 0 0 12px var(--ochre);
+  }
+  @keyframes scan {
+    0%, 100% { top: 0; }
+    50% { top: calc(100% - 3px); }
+  }
+
+  .result-card {
+    background: var(--bg-cream);
+    border-radius: 16px;
+    padding: 16px;
+    border: 1px solid var(--line);
+    margin-bottom: 12px;
+  }
+  .result-card .res-name { font-size: 22px; font-weight: 700; margin: 0 0 2px; }
+  .result-card .res-sci { font-size: 14px; font-style: italic; color: var(--ink-soft); margin: 0 0 12px; }
+  .result-meta {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-top: 12px;
+  }
+  .result-meta .meta-item {
+    background: white;
+    padding: 10px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+  }
+  .result-meta .meta-lbl { font-size: 10px; text-transform: uppercase; color: var(--muted); letter-spacing: 1px; margin-bottom: 2px; }
+  .result-meta .meta-val { font-size: 13px; font-weight: 600; color: var(--ink); }
+
+  .xp-burst {
+    background: linear-gradient(135deg, var(--ochre), var(--rust));
+    color: white;
+    text-align: center;
+    padding: 14px;
+    border-radius: 12px;
+    margin: 12px 0;
+    font-weight: 700;
+    font-size: 16px;
+    box-shadow: 0 4px 16px rgba(201,151,74,0.3);
+  }
+  .xp-burst .lg-tag { font-size: 11px; opacity: 0.9; margin-top: 2px; font-weight: 500; }
+
+  /* Fungus warning — non-dismissable */
+  .fungus-warning {
+    background: var(--rust);
+    color: white;
+    padding: 12px 14px;
+    border-radius: 10px;
+    font-size: 13px;
+    line-height: 1.4;
+    margin-bottom: 14px;
+    border-left: 4px solid var(--fungus-deep);
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  .fungus-warning .warn-icon { font-size: 20px; flex-shrink: 0; }
+
+  /* Non-native flag */
+  .nonnative-flag {
+    background: #f4e4d4;
+    border: 1px solid var(--rust);
+    color: var(--fungus-deep);
+    padding: 12px 14px;
+    border-radius: 10px;
+    margin-bottom: 12px;
+    font-size: 13px;
+  }
+  .nonnative-flag b { color: var(--rust); }
+
+  /* ===================== TOAST ===================== */
+  .toast {
+    position: fixed;
+    bottom: calc(var(--nav-height) + 24px + var(--safe-bottom));
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--ink);
+    color: white;
+    padding: 12px 20px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 600;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+    z-index: 300;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+
+  /* Theme overlay for fungi sections */
+  .fungi-theme {
+    --plant-deep: var(--fungus-deep);
+    --plant-mid: var(--fungus-mid);
+  }
+
+  /* Detail modal photo */
+  .detail-photo {
+    width: 100%; aspect-ratio: 1;
+    background: var(--sandstone);
+    background-size: cover; background-position: center;
+    border-radius: 16px;
+    margin-bottom: 16px;
+  }
+
+  /* Map marker styling */
+  .marker-pin {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    display: grid; place-items: center;
+    font-size: 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    border: 2px solid white;
+  }
+
+  /* Hide scrollbars but keep functional */
+  .view::-webkit-scrollbar { display: none; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="app-header">
+    <div class="logo">
+      <div class="logo-icon">🌿</div>
+      <div>Plant Parent</div>
+    </div>
+    <div class="header-right">
+      <span class="ai-pill" id="aiPill" style="display:none">AI</span>
+      <span class="sync-pill" id="syncPill" style="display:none">☁️</span>
+      <div class="tier-pill" id="tierPill">
+        <span id="idCount">0</span>/<span id="idLimit">10</span> IDs
+      </div>
+      <button class="icon-btn" id="settingsBtn" aria-label="Settings">⚙️</button>
+    </div>
+  </header>
+
+  <!-- ============= DISCOVER VIEW ============= -->
+  <section class="view active" id="view-discover">
+    <div class="hero">
+      <h1>Hunt the wild.</h1>
+      <p>Discover rare Australian native plants and fungi. Snap, identify, collect.</p>
+    </div>
+
+    <div class="discover-actions discover-actions--single">
+      <button class="action-card primary" id="snapBtn" type="button">
+        <span class="ico">📸</span>
+        <div class="label">Snap a photo</div>
+        <div class="sub">Live camera only — go find one!</div>
+      </button>
+      <input type="file" id="cameraInput" accept="image/*" capture="environment" hidden />
+    </div>
+    <p class="field-note">Plant Parent is a live treasure hunt. Photos must come from your camera in the field — no gallery uploads. 🌿</p>
+
+    <div class="section-title">Recent finds</div>
+    <div class="recent-grid" id="recentGrid"></div>
+  </section>
+
+  <!-- ============= COLLECTION VIEW ============= -->
+  <section class="view" id="view-collection">
+    <div class="tabs">
+      <button class="tab active" data-kingdom="all">All</button>
+      <button class="tab" data-kingdom="plant">🌿 Herbarium</button>
+      <button class="tab" data-kingdom="fungi">🍄 Mycarium</button>
+    </div>
+
+    <div class="stats-bar">
+      <div class="stat-chip">
+        <div class="num" id="statPlants">0</div>
+        <div class="lbl">Plants</div>
+      </div>
+      <div class="stat-chip">
+        <div class="num" id="statFungi">0</div>
+        <div class="lbl">Fungi</div>
+      </div>
+      <div class="stat-chip">
+        <div class="num" id="statRare">0</div>
+        <div class="lbl">Rare+</div>
+      </div>
+    </div>
+
+    <div class="collection-grid" id="collectionGrid"></div>
+  </section>
+
+  <!-- ============= MAP VIEW ============= -->
+  <section class="view" id="view-map">
+    <div class="map-legend">
+      <div class="leg-item"><div class="leg-dot" style="background:var(--plant-mid)">🌿</div>Plants</div>
+      <div class="leg-item"><div class="leg-dot" style="background:var(--fungus-mid)">🍄</div>Fungi</div>
+    </div>
+    <div id="map"></div>
+  </section>
+
+  <!-- ============= PROFILE VIEW ============= -->
+  <section class="view" id="view-profile">
+    <div class="level-card">
+      <div class="lvl-lbl">Level</div>
+      <div class="lvl-num" id="profileLevel">1</div>
+      <div class="xp-bar"><div class="xp-fill" id="xpFill" style="width:0%"></div></div>
+      <div class="xp-text">
+        <span><span id="profileXP">0</span> XP</span>
+        <span><span id="xpToNext">100</span> XP to next level</span>
+      </div>
+    </div>
+
+    <div class="freemium-card" id="freemiumCard">
+      <div class="fm-title">Free tier</div>
+      <div class="freemium-progress"><div class="freemium-progress-fill" id="freemiumFill" style="width:0%"></div></div>
+      <div class="fm-meta">
+        <span><span id="fmIdsUsed">0</span>/10 IDs used</span>
+        <span><span id="fmSlotsUsed">0</span>/10 slots used</span>
+      </div>
+    </div>
+
+    <div class="section-title">Badges</div>
+    <div class="badges-grid" id="badgesGrid"></div>
+  </section>
+
+  <!-- ============= BOTTOM NAV ============= -->
+  <nav class="bottom-nav">
+    <button class="nav-btn active" data-view="discover"><span class="icon">📸</span><span>Discover</span></button>
+    <button class="nav-btn" data-view="collection"><span class="icon">📔</span><span>Collection</span></button>
+    <button class="nav-btn" data-view="map"><span class="icon">🗺️</span><span>Map</span></button>
+    <button class="nav-btn" data-view="profile"><span class="icon">👤</span><span>Profile</span></button>
+  </nav>
+</div>
+
+<!-- ============= MODALS ============= -->
+<div class="modal-backdrop" id="modal">
+  <div class="modal" id="modalContent">
+    <div class="modal-handle"></div>
+    <button class="close-btn" id="modalClose">×</button>
+    <div id="modalBody"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+/* ===========================================================
+   PLANT PARENT — gamified treasure hunt for AU native flora & fungi
+   =========================================================== */
+
+/* ============= STATIC SPECIES TABLE ============= */
+const SPECIES = [
+  // ===== PLANTS — COMMON =====
+  { id:'p001', name:'Tasmanian Blue Gum', sci:'Eucalyptus globulus', kingdom:'plant', rarity:'common', emoji:'🌳' },
+  { id:'p002', name:'Blackwood', sci:'Acacia melanoxylon', kingdom:'plant', rarity:'common', emoji:'🌿' },
+  { id:'p003', name:'Coast Banksia', sci:'Banksia integrifolia', kingdom:'plant', rarity:'common', emoji:'🌼' },
+  { id:'p004', name:'Silky Oak', sci:'Grevillea robusta', kingdom:'plant', rarity:'common', emoji:'🌳' },
+  { id:'p005', name:'Crimson Bottlebrush', sci:'Callistemon citrinus', kingdom:'plant', rarity:'common', emoji:'🌺' },
+  { id:'p006', name:'River Red Gum', sci:'Eucalyptus camaldulensis', kingdom:'plant', rarity:'common', emoji:'🌳' },
+  { id:'p007', name:'Silver Wattle', sci:'Acacia dealbata', kingdom:'plant', rarity:'common', emoji:'🌿' },
+  { id:'p008', name:'Saw Banksia', sci:'Banksia serrata', kingdom:'plant', rarity:'common', emoji:'🌼' },
+  { id:'p009', name:'Coast Tea-tree', sci:'Leptospermum laevigatum', kingdom:'plant', rarity:'common', emoji:'🌿' },
+  { id:'p010', name:'Native Sarsaparilla', sci:'Hardenbergia violacea', kingdom:'plant', rarity:'common', emoji:'💜' },
+  { id:'p011', name:'Forest Red Gum', sci:'Eucalyptus tereticornis', kingdom:'plant', rarity:'common', emoji:'🌳' },
+  { id:'p012', name:'Sydney Golden Wattle', sci:'Acacia longifolia', kingdom:'plant', rarity:'common', emoji:'💛' },
+  { id:'p013', name:'Heath Banksia', sci:'Banksia ericifolia', kingdom:'plant', rarity:'common', emoji:'🌼' },
+  { id:'p014', name:'Spiny-headed Mat-rush', sci:'Lomandra longifolia', kingdom:'plant', rarity:'common', emoji:'🌾' },
+  { id:'p015', name:'Spotted Gum', sci:'Corymbia maculata', kingdom:'plant', rarity:'common', emoji:'🌳' },
+
+  // ===== PLANTS — UNCOMMON =====
+  { id:'p016', name:'NSW Waratah', sci:'Telopea speciosissima', kingdom:'plant', rarity:'uncommon', emoji:'🌹' },
+  { id:'p017', name:'Grass Tree', sci:'Xanthorrhoea australis', kingdom:'plant', rarity:'uncommon', emoji:'🌴' },
+  { id:'p018', name:'Scarlet Banksia', sci:'Banksia coccinea', kingdom:'plant', rarity:'uncommon', emoji:'🌺' },
+  { id:'p019', name:'Mountain Ash', sci:'Eucalyptus regnans', kingdom:'plant', rarity:'uncommon', emoji:'🌲' },
+  { id:'p020', name:'Golden Wattle', sci:'Acacia pycnantha', kingdom:'plant', rarity:'uncommon', emoji:'💛' },
+  { id:'p021', name:'Gymea Lily', sci:'Doryanthes excelsa', kingdom:'plant', rarity:'uncommon', emoji:'🌹' },
+  { id:'p022', name:'Red & Green Kangaroo Paw', sci:'Anigozanthos manglesii', kingdom:'plant', rarity:'uncommon', emoji:'🌷' },
+  { id:'p023', name:'Burrawang', sci:'Macrozamia communis', kingdom:'plant', rarity:'uncommon', emoji:'🌴' },
+  { id:'p024', name:'Firewood Banksia', sci:'Banksia menziesii', kingdom:'plant', rarity:'uncommon', emoji:'🌼' },
+  { id:'p025', name:'Pin-cushion Hakea', sci:'Hakea laurina', kingdom:'plant', rarity:'uncommon', emoji:'🌸' },
+  { id:'p026', name:'Brown Boronia', sci:'Boronia megastigma', kingdom:'plant', rarity:'uncommon', emoji:'🌸' },
+  { id:'p027', name:'Rough Tree Fern', sci:'Cyathea australis', kingdom:'plant', rarity:'uncommon', emoji:'🌿' },
+  { id:'p028', name:'Sturt\'s Desert Pea', sci:'Swainsona formosa', kingdom:'plant', rarity:'uncommon', emoji:'🌹' },
+
+  // ===== PLANTS — RARE =====
+  { id:'p029', name:'Wollemi Pine', sci:'Wollemia nobilis', kingdom:'plant', rarity:'rare', emoji:'🌲' },
+  { id:'p030', name:'Silver Princess', sci:'Eucalyptus caesia', kingdom:'plant', rarity:'rare', emoji:'🌳' },
+  { id:'p031', name:'Monga Waratah', sci:'Telopea mongaensis', kingdom:'plant', rarity:'rare', emoji:'🌹' },
+  { id:'p032', name:'Feather-leaved Banksia', sci:'Banksia brownii', kingdom:'plant', rarity:'rare', emoji:'🌼' },
+  { id:'p033', name:'Giant Sundew', sci:'Drosera gigantea', kingdom:'plant', rarity:'rare', emoji:'🌱' },
+  { id:'p034', name:'WA Christmas Tree', sci:'Nuytsia floribunda', kingdom:'plant', rarity:'rare', emoji:'🎄' },
+  { id:'p035', name:'Silky Emu Bush', sci:'Eremophila nivea', kingdom:'plant', rarity:'rare', emoji:'💜' },
+  { id:'p036', name:'Royal Hakea', sci:'Hakea victoria', kingdom:'plant', rarity:'rare', emoji:'🍂' },
+  { id:'p037', name:'Scarlet Featherflower', sci:'Verticordia grandis', kingdom:'plant', rarity:'rare', emoji:'🌺' },
+  { id:'p038', name:'Blue Caladenia', sci:'Caladenia caerulea', kingdom:'plant', rarity:'rare', emoji:'💙' },
+
+  // ===== PLANTS — LEGENDARY =====
+  { id:'p039', name:'Matchstick Banksia', sci:'Banksia cuneata', kingdom:'plant', rarity:'legendary', emoji:'✨' },
+  { id:'p040', name:'Mongarlowe Mallee', sci:'Eucalyptus recurva', kingdom:'plant', rarity:'legendary', emoji:'✨' },
+  { id:'p041', name:'Illawarra Greenhood', sci:'Pterostylis gibbosa', kingdom:'plant', rarity:'legendary', emoji:'✨' },
+  { id:'p042', name:'King Spider Orchid', sci:'Caladenia huegelii', kingdom:'plant', rarity:'legendary', emoji:'✨' },
+  { id:'p043', name:'Round-leaf Honeysuckle', sci:'Lambertia orbifolia', kingdom:'plant', rarity:'legendary', emoji:'✨' },
+
+  // ===== FUNGI — COMMON =====
+  { id:'f001', name:'Turkey Tail', sci:'Trametes versicolor', kingdom:'fungi', rarity:'common', emoji:'🍂' },
+  { id:'f002', name:'Split Gill', sci:'Schizophyllum commune', kingdom:'fungi', rarity:'common', emoji:'🍄' },
+  { id:'f003', name:'Pixie\'s Parasol', sci:'Mycena interrupta', kingdom:'fungi', rarity:'common', emoji:'💙' },
+  { id:'f004', name:'Earthball', sci:'Scleroderma cepa', kingdom:'fungi', rarity:'common', emoji:'🟤' },
+  { id:'f005', name:'Australian Honey Fungus', sci:'Armillaria luteobubalina', kingdom:'fungi', rarity:'common', emoji:'🍯' },
+  { id:'f006', name:'Wood Ear', sci:'Auricularia cornea', kingdom:'fungi', rarity:'common', emoji:'👂' },
+
+  // ===== FUNGI — UNCOMMON =====
+  { id:'f007', name:'Ghost Fungus', sci:'Omphalotus nidiformis', kingdom:'fungi', rarity:'uncommon', emoji:'👻' },
+  { id:'f008', name:'Anemone Stinkhorn', sci:'Aseroe rubra', kingdom:'fungi', rarity:'uncommon', emoji:'❤️' },
+  { id:'f009', name:'Basket Fungus', sci:'Ileodictyon cibarium', kingdom:'fungi', rarity:'uncommon', emoji:'🧺' },
+  { id:'f010', name:'White Jelly Fungus', sci:'Tremella fuciformis', kingdom:'fungi', rarity:'uncommon', emoji:'🤍' },
+  { id:'f011', name:'Dyeball', sci:'Pisolithus tinctorius', kingdom:'fungi', rarity:'uncommon', emoji:'🟫' },
+  { id:'f012', name:'Veiled Lady', sci:'Phallus indusiatus', kingdom:'fungi', rarity:'uncommon', emoji:'🤍' },
+  { id:'f013', name:'Native Bolete', sci:'Boletellus obscurecoccineus', kingdom:'fungi', rarity:'uncommon', emoji:'🍄' },
+
+  // ===== FUNGI — RARE =====
+  { id:'f014', name:'Emperor Cortinarius', sci:'Cortinarius archeri', kingdom:'fungi', rarity:'rare', emoji:'💜' },
+  { id:'f015', name:'Sky Blue Mushroom', sci:'Entoloma virescens', kingdom:'fungi', rarity:'rare', emoji:'💙' },
+  { id:'f016', name:'Bioluminescent Mycena', sci:'Mycena chlorophos', kingdom:'fungi', rarity:'rare', emoji:'✨' },
+  { id:'f017', name:'Vermilion Waxcap', sci:'Hygrocybe miniata', kingdom:'fungi', rarity:'rare', emoji:'❤️' },
+  { id:'f018', name:'Spectacular Rustgill', sci:'Gymnopilus junonius', kingdom:'fungi', rarity:'rare', emoji:'🟠' },
+  { id:'f019', name:'Beech Orange', sci:'Cyttaria gunnii', kingdom:'fungi', rarity:'rare', emoji:'🟠' },
+
+  // ===== FUNGI — LEGENDARY =====
+  { id:'f020', name:'Native Truffle', sci:'Tuber oligospermum', kingdom:'fungi', rarity:'legendary', emoji:'✨' },
+  { id:'f021', name:'Elegant Blue Webcap', sci:'Cortinarius rotundisporus', kingdom:'fungi', rarity:'legendary', emoji:'✨' },
+  { id:'f022', name:'Coral Tooth', sci:'Hericium coralloides', kingdom:'fungi', rarity:'legendary', emoji:'✨' },
+  { id:'f023', name:'Barragee Bolete', sci:'Boletus barragensis', kingdom:'fungi', rarity:'legendary', emoji:'✨' },
+];
+
+// Non-native species the simulator may sometimes "find" (rare event)
+const NON_NATIVE = [
+  { name:'Common Dandelion', sci:'Taraxacum officinale', kingdom:'plant' },
+  { name:'Field Mushroom', sci:'Agaricus bisporus', kingdom:'fungi' },
+  { name:'Fly Agaric', sci:'Amanita muscaria', kingdom:'fungi' },
+];
+
+/* ============= RARITY CONFIG ============= */
+const RARITY = {
+  common:    { xp: 10,  weight: 60, label: 'Common' },
+  uncommon:  { xp: 25,  weight: 25, label: 'Uncommon' },
+  rare:      { xp: 100, weight: 12, label: 'Rare' },
+  legendary: { xp: 500, weight: 3,  label: 'Legendary' },
+};
+
+/* ============= BADGES ============= */
+const BADGES = [
+  { id:'first-bloom',      name:'First Bloom',      desc:'5 plant discoveries',  icon:'🌸', check: s => s.plants >= 5 },
+  { id:'first-spore',      name:'First Spore',      desc:'5 fungi discoveries',  icon:'🍄', check: s => s.fungi >= 5 },
+  { id:'kingdom-crosser',  name:'Kingdom Crosser',  desc:'1 of each kingdom',    icon:'⚖️', check: s => s.plants >= 1 && s.fungi >= 1 },
+  { id:'local-legend',     name:'Local Legend',     desc:'First in suburb find', icon:'🏆', check: s => s.localLegends >= 1 },
+  { id:'rare-finder',      name:'Rare Finder',      desc:'Discover 3 rare species', icon:'💎', check: s => s.rareCount >= 3 },
+  { id:'mythic',           name:'Mythic',           desc:'Find a Legendary',     icon:'✨', check: s => s.legendaryCount >= 1 },
+];
+
+/* ============= STATE ============= */
+const FREE_LIMITS = { ids: 10, slots: 10 };
+const CLAUDE_MODEL = 'claude-sonnet-4-6';
+let state = loadState();
+let settings = loadSettings();
+
+function loadSettings() {
+  let s = {};
+  try { s = JSON.parse(localStorage.getItem('plantparent.settings') || '{}'); } catch {}
+  // Default iNaturalist ON for new users (free + accurate)
+  if (s.iNatEnabled === undefined) s.iNatEnabled = true;
+  return s;
+}
+function saveSettings() {
+  localStorage.setItem('plantparent.settings', JSON.stringify(settings));
+}
+
+function loadState() {
+  const saved = localStorage.getItem('plantparent.state');
+  if (saved) {
+    try { return JSON.parse(saved); } catch(e) {}
+  }
+  return {
+    discoveries: [],   // {id, speciesId, name, sci, kingdom, rarity, photo, lat, lng, suburb, ts}
+    idsUsed: 0,
+    badges: [],
+    suburbsSeen: {},   // suburb -> [speciesIds]
+    isPro: false,
+  };
+}
+
+function saveState() {
+  localStorage.setItem('plantparent.state', JSON.stringify(state));
+}
+
+/* ============= HELPERS ============= */
+function $(sel, root=document) { return root.querySelector(sel); }
+function $$(sel, root=document) { return [...root.querySelectorAll(sel)]; }
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+
+function getStats() {
+  const plants = state.discoveries.filter(d => d.kingdom === 'plant').length;
+  const fungi  = state.discoveries.filter(d => d.kingdom === 'fungi').length;
+  const rareCount      = state.discoveries.filter(d => d.rarity === 'rare').length;
+  const legendaryCount = state.discoveries.filter(d => d.rarity === 'legendary').length;
+  const xp    = state.discoveries.reduce((sum, d) => sum + (RARITY[d.rarity]?.xp || 0), 0);
+  const localLegends = state.discoveries.filter(d => d.isLocalLegend).length;
+  return { plants, fungi, rareCount, legendaryCount, xp, total: state.discoveries.length, localLegends };
+}
+
+function getLevel(xp) {
+  // simple curve: 100, 250, 500, 1000, 2000, ...
+  let level = 1, need = 100, accum = 0;
+  while (xp >= accum + need) { accum += need; level++; need = Math.round(need * 1.6); }
+  return { level, currentXP: xp - accum, neededXP: need };
+}
+
+function pickWeightedRarity() {
+  const total = Object.values(RARITY).reduce((s,r) => s + r.weight, 0);
+  let r = Math.random() * total;
+  for (const [key, val] of Object.entries(RARITY)) {
+    r -= val.weight;
+    if (r <= 0) return key;
+  }
+  return 'common';
+}
+
+function pickSpecies() {
+  // 5% chance: non-native (won't be added to herbarium)
+  if (Math.random() < 0.05) {
+    const nn = NON_NATIVE[Math.floor(Math.random() * NON_NATIVE.length)];
+    return { ...nn, isNonNative: true };
+  }
+  const rarity = pickWeightedRarity();
+  const pool = SPECIES.filter(s => s.rarity === rarity);
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function showToast(msg, ms=2200) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => t.classList.remove('show'), ms);
+}
+
+/* ============= GEOLOCATION ============= */
+function getLocation() {
+  return new Promise(resolve => {
+    if (!navigator.geolocation) return resolve(null);
+    navigator.geolocation.getCurrentPosition(
+      pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => resolve(null),
+      { timeout: 5000, maximumAge: 60000 }
+    );
+  });
+}
+
+async function reverseGeocode(lat, lng) {
+  // Pseudo-suburb derived from rounded coords (deterministic, no API call needed for MVP)
+  // Real-world: use Nominatim or similar
+  const r = (n) => Math.round(n * 100) / 100;
+  return `Sector ${r(lat)},${r(lng)}`;
+}
+
+/* ============= MODAL ============= */
+function openModal(html) {
+  console.log('[PP] openModal');
+  const m = $('#modal');
+  $('#modalBody').innerHTML = html;
+  m.classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+function closeModal() {
+  console.log('[PP] closeModal');
+  $('#modal').classList.remove('show');
+  document.body.style.overflow = '';
+}
+// Expose to window so inline onclick handlers in dynamically-injected modal HTML always work
+window.openModal = openModal;
+window.closeModal = closeModal;
+
+$('#modalClose').addEventListener('click', closeModal);
+$('#modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
+
+/* ============= NAVIGATION ============= */
+$$('.nav-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const view = btn.dataset.view;
+    switchView(view);
+  });
+});
+
+function switchView(view) {
+  $$('.view').forEach(v => v.classList.remove('active'));
+  $$('.nav-btn').forEach(n => n.classList.remove('active'));
+  $('#view-' + view).classList.add('active');
+  $$(`.nav-btn[data-view="${view}"]`).forEach(n => n.classList.add('active'));
+  if (view === 'collection') renderCollection();
+  if (view === 'profile') renderProfile();
+  if (view === 'map') setTimeout(initOrUpdateMap, 50);
+  if (view === 'discover') renderRecent();
+}
+
+/* ============= IDENTIFICATION FLOW ============= */
+$('#snapBtn').addEventListener('click', () => {
+  console.log('[PP] Snap button clicked');
+  // Make sure no lingering modal state is blocking interaction
+  document.body.style.overflow = '';
+  $('#modal').classList.remove('show');
+  const input = $('#cameraInput');
+  input.value = ''; // Force-reset BEFORE picker opens
+  input.click();
+});
+
+$('#cameraInput').addEventListener('change', e => {
+  console.log('[PP] Change event, files:', e.target.files?.length);
+  const file = e.target.files[0];
+  e.target.value = ''; // Reset AFTER so the next pick always triggers
+  handlePhoto(file);
+});
+
+function handlePhoto(file) {
+  console.log('[PP] handlePhoto called', file ? `(${file.name}, ${file.size} bytes)` : '(no file)');
+  if (!file) return;
+  // Make sure any leftover modal lock is cleared before we open the next one
+  document.body.style.overflow = '';
+  // Freemium gate
+  if (!state.isPro && state.idsUsed >= FREE_LIMITS.ids) {
+    return showUpgradeModal();
+  }
+  const reader = new FileReader();
+  reader.onload = e => startIdentification(e.target.result);
+  reader.onerror = e => {
+    console.error('[PP] FileReader error:', e);
+    showToast('Could not read the photo file');
+  };
+  reader.readAsDataURL(file);
+}
+
+async function startIdentification(photoDataUrl) {
+  const hasINat = settings.iNatEnabled !== false; // default ON
+  const hasClaudeID = !!(settings.apiKey && settings.aiEnabled !== false && settings.useClaudeAsPrimary);
+  const hasClaudeEnrich = !!(settings.apiKey && settings.aiEnabled !== false);
+
+  // Decide primary source: iNat first, Claude if explicitly preferred, else demo
+  let primary = 'demo';
+  if (settings.useClaudeAsPrimary && hasClaudeEnrich) primary = 'claude';
+  else if (hasINat) primary = 'inat';
+  else if (hasClaudeEnrich) primary = 'claude';
+  console.log('[PP] Identification source decision:', { primary, hasINat, hasClaudeID, hasClaudeEnrich, useClaudeAsPrimary: settings.useClaudeAsPrimary });
+
+  const sourceLabel = primary === 'inat' ? 'iNaturalist' : (primary === 'claude' ? 'Claude' : 'Demo');
+  openModal(`
+    <h2>Identifying...</h2>
+    <p class="lead">${primary === 'inat'
+      ? 'Asking iNaturalist\'s vision model (trained on millions of citizen-science observations).'
+      : primary === 'claude'
+      ? 'Sending to Claude Vision for expert identification.'
+      : 'Analyzing your photo against the Australian native species library.'}</p>
+    <div class="id-photo-preview" style="background-image:url('${photoDataUrl}')">
+      <div class="scanner-line"></div>
+    </div>
+    <p style="text-align:center; font-size:11px; color:var(--muted); margin:8px 0 0;">Source: ${sourceLabel}</p>
+    <button class="btn secondary" onclick="closeModal()" style="margin-top:12px">Cancel</button>
+  `);
+
+  // Capture location early so iNat can use it for geo-bias
+  const loc = await getLocation();
+
+  let species;
+  try {
+    if (primary === 'inat') {
+      species = await identifyWithINaturalist(photoDataUrl, loc, settings.iNatToken);
+      species.source = 'inat';
+      // Optional Claude prose enrichment
+      if (hasClaudeEnrich && species.kingdom !== 'neither') {
+        try {
+          const note = await enrichWithClaude(photoDataUrl, species, settings.apiKey);
+          if (note) species.aiNotes = note;
+        } catch (e) {
+          console.warn('Enrichment skipped:', e.message);
+        }
+      }
+    } else if (primary === 'claude') {
+      species = await identifyWithClaude(photoDataUrl, settings.apiKey);
+      species.source = 'claude';
+    } else {
+      await new Promise(r => setTimeout(r, 1800));
+      species = pickSpecies();
+      species.source = 'demo';
+    }
+  } catch (err) {
+    console.error('Primary ID failed:', err);
+    const hasClaudeKey = !!settings.apiKey;
+    let recovered = false;
+
+    // Try Claude as fallback if we have a key and weren't already using it
+    if (primary === 'inat' && hasClaudeKey) {
+      try {
+        showToast('iNaturalist unreachable — trying Claude');
+        species = await identifyWithClaude(photoDataUrl, settings.apiKey);
+        species.source = 'claude';
+        recovered = true;
+      } catch (err2) {
+        console.error('Claude fallback also failed:', err2);
+      }
+    }
+
+    // Final safety net: demo mode so the user always gets a result
+    if (!recovered) {
+      const reason = primary === 'inat'
+        ? 'iNaturalist requires an API token — using demo this time. Add a token in settings to enable real ID.'
+        : 'ID service unavailable — using demo this time.';
+      showToast(reason, 4000);
+      console.warn('[PP] All real ID services failed, falling back to demo mode');
+      await new Promise(r => setTimeout(r, 600));
+      species = pickSpecies();
+      species.source = 'demo';
+      species.fellBackFromError = true;
+      species.errorMessage = err.message;
+    }
+  }
+
+  // Handle "neither" case — image isn't a plant or fungus
+  if (species && species.kingdom === 'neither') {
+    return openModal(`
+      <h2>Hmm, I couldn't see flora or fungi</h2>
+      <div class="id-photo-preview" style="background-image:url('${photoDataUrl}')"></div>
+      <div class="nonnative-flag">
+        <b>No plant or fungus detected.</b><br/>
+        ${species.notes ? `<i>"${species.notes}"</i><br/>` : ''}
+        Try a closer shot of foliage, flowers, fruiting bodies, or a clear single subject.
+      </div>
+      <button class="btn" onclick="closeModal()">Try again</button>
+    `);
+  }
+
+  const suburb = loc ? await reverseGeocode(loc.lat, loc.lng) : null;
+  showResult(species, photoDataUrl, loc, suburb);
+}
+
+function showIDError(err, photoDataUrl) {
+  const msg = String(err?.message || err || 'Unknown error');
+  const isAuth = /401|403|invalid|unauthor/i.test(msg);
+  const isCORS = /cors|network|failed to fetch/i.test(msg);
+  const isINat = /inaturalist|inat/i.test(msg);
+  let title = 'Identification failed';
+  let hint;
+  if (isAuth) {
+    hint = isINat
+      ? 'iNaturalist needs an API token. Get one free at inaturalist.org/users/api_token and paste it in settings.'
+      : 'API key error. Check your Claude key in settings.';
+  } else if (isCORS) {
+    hint = 'The service blocked the browser request (CORS or network). If you have a Claude key set, it would have been used as a fallback. Otherwise, try toggling off iNaturalist and using Claude directly, or use demo mode.';
+  } else {
+    hint = 'Network or API problem. Demo mode is always available as a fallback.';
+  }
+  openModal(`
+    <h2>${title}</h2>
+    <div class="id-photo-preview" style="background-image:url('${photoDataUrl}')"></div>
+    <div class="nonnative-flag">
+      <b>${hint}</b>
+      <div style="font-family:monospace; font-size:11px; opacity:0.75; margin-top:10px; background:rgba(0,0,0,0.05); padding:8px; border-radius:6px; word-break:break-word;">${msg.slice(0, 400)}</div>
+    </div>
+    <button class="btn" onclick="closeModal(); openSettings()">Open settings</button>
+    <button class="btn secondary" onclick="closeModal()" style="margin-top:8px">Dismiss</button>
+  `);
+}
+
+/* ============= iNATURALIST VISION ============= */
+async function identifyWithINaturalist(dataUrl, loc, token) {
+  console.log('[PP] iNat: starting', { hasToken: !!token, loc });
+  // Convert data URL to Blob
+  const blobRes = await fetch(dataUrl);
+  const blob = await blobRes.blob();
+
+  const form = new FormData();
+  form.append('image', blob, 'photo.jpg');
+  if (loc?.lat != null && loc?.lng != null) {
+    form.append('lat', String(loc.lat));
+    form.append('lng', String(loc.lng));
+  }
+  // Bias toward Australia
+  form.append('place_id', '6744'); // iNat place_id for Australia
+
+  const headers = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch('https://api.inaturalist.org/v1/computervision/score_image', {
+    method: 'POST',
+    body: form,
+    headers,
+  });
+
+  if (!res.ok) {
+    const txt = await res.text();
+    if (res.status === 401 || res.status === 403) {
+      throw new Error('iNaturalist requires an API token. Generate one at inaturalist.org/users/api_token and paste it into settings.');
+    }
+    throw new Error(`iNaturalist ${res.status}: ${txt.slice(0, 200)}`);
+  }
+
+  const data = await res.json();
+  console.log('[PP] iNat: got', data.results?.length, 'results, top:', data.results?.[0]?.taxon?.name);
+  if (!data.results || data.results.length === 0) {
+    return { kingdom: 'neither', notes: 'No species suggestions returned by iNaturalist.' };
+  }
+
+  return mapINatToSpecies(data.results[0]);
+}
+
+function mapINatToSpecies(result) {
+  const taxon = result.taxon;
+  const iconic = taxon.iconic_taxon_name;
+
+  if (iconic !== 'Plantae' && iconic !== 'Fungi') {
+    return {
+      kingdom: 'neither',
+      notes: `Detected ${iconic || 'something else'} (${taxon.name}). Plant Parent only collects plants and fungi.`
+    };
+  }
+
+  const kingdom = iconic === 'Fungi' ? 'fungi' : 'plant';
+  const commonName = taxon.preferred_common_name || taxon.name;
+  const sciName = taxon.name;
+  const confidence = Math.round(result.combined_score || result.vision_score || 0);
+  const rank = taxon.rank;
+  const isSpeciesLevel = rank === 'species' || rank === 'subspecies';
+
+  // Match against static table to inherit rarity + stable id
+  const sciNorm = sciName.toLowerCase().trim();
+  const match = SPECIES.find(s => s.sci.toLowerCase() === sciNorm);
+  if (match) {
+    return {
+      ...match,
+      confidence,
+      iNatId: taxon.id,
+      source: 'inat',
+    };
+  }
+
+  // Not in our table — build an ad-hoc entry
+  const emoji = kingdom === 'fungi' ? '🍄' : '🌿';
+  return {
+    id: 'inat-' + taxon.id,
+    speciesId: 'inat-' + taxon.id,
+    name: isSpeciesLevel ? commonName : `${commonName} (${rank})`,
+    sci: isSpeciesLevel ? sciName : `${sciName} sp.`,
+    kingdom,
+    rarity: 'uncommon', // not in our common-AU table → tentatively uncommon
+    emoji,
+    confidence,
+    iNatId: taxon.id,
+    rank,
+    source: 'inat',
+  };
+}
+
+/* ============= CLAUDE ENRICHMENT ============= */
+async function enrichWithClaude(dataUrl, species, apiKey) {
+  // Lightweight prose-only enrichment when iNat handled the ID
+  const m = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+  if (!m) return null;
+  const [, mediaType, b64] = m;
+
+  const prompt = `You are a friendly Australian field naturalist. A user just identified this image as ${species.name} (${species.sci}), a ${species.kingdom}.
+
+Write ONE short field-guide note about this species — distinctive features, habitat, or a fun fact. Max 120 characters. Plain text only, no markdown, no quotes.`;
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: CLAUDE_MODEL,
+      max_tokens: 200,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: mediaType, data: b64 } },
+          { type: 'text', text: prompt }
+        ]
+      }]
+    })
+  });
+
+  if (!res.ok) throw new Error(`Enrichment failed: ${res.status}`);
+  const data = await res.json();
+  return (data.content?.[0]?.text || '').trim().replace(/^["']|["']$/g, '');
+}
+
+/* ============= CLAUDE VISION (fallback / primary if no iNat) ============= */
+async function identifyWithClaude(dataUrl, apiKey) {
+  console.log('[PP] Claude: starting', { keyPresent: !!apiKey, keyPrefix: apiKey?.slice(0, 10) + '...' });
+  const m = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+  if (!m) throw new Error('Bad image data');
+  const mediaType = m[1];
+  const b64 = m[2];
+
+  const prompt = `You are an expert botanist and mycologist specializing in Australian native flora and fungi.
+
+Identify the most prominent plant or fungus in this image. Reply with ONLY valid JSON (no markdown fences, no prose, no preamble), matching exactly this shape:
+
+{
+  "kingdom": "plant" | "fungi" | "neither",
+  "commonName": "string",
+  "scientificName": "Genus species",
+  "nativeToAustralia": true | false,
+  "rarity": "common" | "uncommon" | "rare" | "legendary",
+  "confidence": 0-100,
+  "notes": "brief field-guide note, max 120 chars"
+}
+
+Rules:
+- "neither" if the image isn't a plant or fungus, or is too unclear to identify.
+- "nativeToAustralia": true only if this species is genuinely native to Australia. Naturalised/introduced species are false.
+- "rarity": common = widespread; uncommon = regional or seasonal; rare = limited range or conservation concern; legendary = critically endangered or famously rare (e.g. Wollemi Pine).
+- Be conservative on rarity. When unsure between two tiers, pick the lower one.
+- Use accepted scientific binomial. Don't invent names.`;
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: CLAUDE_MODEL,
+      max_tokens: 600,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: mediaType, data: b64 } },
+          { type: 'text', text: prompt }
+        ]
+      }]
+    })
+  });
+
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`API ${res.status}: ${txt}`);
+  }
+  const data = await res.json();
+  const text = (data.content?.[0]?.text || '').trim();
+  // Try to peel out JSON if Claude wrapped it
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  const raw = jsonMatch ? jsonMatch[0] : text;
+  const parsed = JSON.parse(raw);
+
+  return mapClaudeToSpecies(parsed);
+}
+
+function mapClaudeToSpecies(c) {
+  if (c.kingdom === 'neither') {
+    return { kingdom: 'neither', notes: c.notes };
+  }
+  if (c.nativeToAustralia === false) {
+    return {
+      isNonNative: true,
+      name: c.commonName,
+      sci: c.scientificName,
+      kingdom: c.kingdom,
+      notes: c.notes,
+    };
+  }
+  // Try to match against our static table for emoji + stable id
+  const sciNorm = (c.scientificName || '').toLowerCase().trim();
+  const match = SPECIES.find(s => s.sci.toLowerCase() === sciNorm);
+  if (match) return { ...match, aiNotes: c.notes, confidence: c.confidence };
+
+  // Build an ad-hoc species entry — Claude found one we don't have in the table
+  const rarity = ['common','uncommon','rare','legendary'].includes(c.rarity) ? c.rarity : 'uncommon';
+  const emoji = c.kingdom === 'fungi' ? '🍄' : '🌿';
+  return {
+    id: 'ai-' + (sciNorm.replace(/\s+/g,'-') || uid()),
+    name: c.commonName || c.scientificName,
+    sci: c.scientificName || 'Unknown',
+    kingdom: c.kingdom === 'fungi' ? 'fungi' : 'plant',
+    rarity,
+    emoji,
+    aiNotes: c.notes,
+    confidence: c.confidence,
+  };
+}
+
+/* ============= SUPABASE SYNC ============= */
+let sb = null;        // supabase client
+let sbUser = null;    // current user object
+let syncing = false;
+
+function initSupabase() {
+  if (!window.supabase) return;
+  const { url, anonKey } = settings.supabase || {};
+  if (!url || !anonKey) { sb = null; return; }
+  try {
+    sb = window.supabase.createClient(url, anonKey, {
+      auth: { persistSession: true, storageKey: 'plantparent.supabase.auth' }
+    });
+    // Restore session if available
+    sb.auth.getSession().then(({ data }) => {
+      sbUser = data.session?.user || null;
+      updateSyncPill();
+      if (sbUser) backgroundSync();
+    });
+    sb.auth.onAuthStateChange((event, session) => {
+      sbUser = session?.user || null;
+      updateSyncPill();
+    });
+  } catch (e) {
+    console.error('Supabase init failed:', e);
+    sb = null;
+  }
+}
+
+function updateSyncPill() {
+  const pill = $('#syncPill');
+  if (!sbUser) { pill.style.display = 'none'; return; }
+  pill.style.display = 'inline-block';
+  pill.classList.toggle('syncing', syncing);
+  pill.textContent = syncing ? '↻' : '☁️';
+}
+
+async function requestOtp(email) {
+  if (!sb) throw new Error('Supabase not configured');
+  const { error } = await sb.auth.signInWithOtp({
+    email,
+    options: { shouldCreateUser: true }
+  });
+  if (error) throw error;
+}
+
+async function verifyOtp(email, token) {
+  if (!sb) throw new Error('Supabase not configured');
+  const { data, error } = await sb.auth.verifyOtp({ email, token, type: 'email' });
+  if (error) throw error;
+  sbUser = data.user;
+  updateSyncPill();
+  await backgroundSync();
+}
+
+async function signOutSupabase() {
+  if (!sb) return;
+  await sb.auth.signOut();
+  sbUser = null;
+  updateSyncPill();
+}
+
+async function syncPush(discovery) {
+  if (!sb || !sbUser) return false;
+  try {
+    const row = {
+      id: discovery.id,
+      user_id: sbUser.id,
+      species_id: discovery.speciesId,
+      name: discovery.name,
+      sci: discovery.sci,
+      kingdom: discovery.kingdom,
+      rarity: discovery.rarity,
+      emoji: discovery.emoji || null,
+      photo: discovery.photo,
+      lat: discovery.lat,
+      lng: discovery.lng,
+      suburb: discovery.suburb,
+      is_local_legend: !!discovery.isLocalLegend,
+      ts: discovery.ts,
+    };
+    const { error } = await sb.from('discoveries').upsert(row);
+    if (error) throw error;
+    return true;
+  } catch (e) {
+    console.error('Sync push failed:', e);
+    showToast('☁️ Sync failed — saved locally');
+    return false;
+  }
+}
+
+async function syncDelete(id) {
+  if (!sb || !sbUser) return false;
+  try {
+    const { error } = await sb.from('discoveries').delete().eq('id', id);
+    if (error) throw error;
+    return true;
+  } catch (e) {
+    console.error('Sync delete failed:', e);
+    return false;
+  }
+}
+
+async function syncPull() {
+  if (!sb || !sbUser) return [];
+  const { data, error } = await sb.from('discoveries').select('*').order('ts', { ascending: true });
+  if (error) throw error;
+  return (data || []).map(r => ({
+    id: r.id,
+    speciesId: r.species_id,
+    name: r.name,
+    sci: r.sci,
+    kingdom: r.kingdom,
+    rarity: r.rarity,
+    emoji: r.emoji,
+    photo: r.photo,
+    lat: r.lat,
+    lng: r.lng,
+    suburb: r.suburb,
+    isLocalLegend: r.is_local_legend,
+    ts: r.ts,
+  }));
+}
+
+async function backgroundSync() {
+  if (!sb || !sbUser || syncing) return;
+  syncing = true;
+  updateSyncPill();
+  try {
+    // Step 1: push any local discoveries not yet on the server
+    const remote = await syncPull();
+    const remoteIds = new Set(remote.map(d => d.id));
+    const localOnly = state.discoveries.filter(d => !remoteIds.has(d.id));
+    for (const d of localOnly) {
+      await syncPush(d);
+    }
+    // Step 2: re-pull and merge — server wins on existing rows, local wins on items not yet pushed
+    const merged = await syncPull();
+    const mergedIds = new Set(merged.map(d => d.id));
+    const localUnpushed = state.discoveries.filter(d => !mergedIds.has(d.id));
+    state.discoveries = [...merged, ...localUnpushed];
+    saveState();
+    renderRecent();
+    if ($('#view-collection').classList.contains('active')) renderCollection();
+  } catch (e) {
+    console.error('Background sync failed:', e);
+    showToast('☁️ Sync error: ' + (e.message || 'unknown'));
+  } finally {
+    syncing = false;
+    updateSyncPill();
+  }
+}
+
+const SUPABASE_SQL = `-- Plant Parent — Supabase schema
+-- Run this once in your Supabase SQL editor
+
+create table if not exists discoveries (
+  id text primary key,
+  user_id uuid references auth.users not null default auth.uid(),
+  species_id text,
+  name text not null,
+  sci text not null,
+  kingdom text not null,
+  rarity text not null,
+  emoji text,
+  photo text,
+  lat float8,
+  lng float8,
+  suburb text,
+  is_local_legend boolean default false,
+  ts bigint not null,
+  created_at timestamptz default now()
+);
+
+alter table discoveries enable row level security;
+
+drop policy if exists "read own" on discoveries;
+drop policy if exists "insert own" on discoveries;
+drop policy if exists "delete own" on discoveries;
+
+create policy "read own"   on discoveries for select using (auth.uid() = user_id);
+create policy "insert own" on discoveries for insert with check (auth.uid() = user_id);
+create policy "delete own" on discoveries for delete using (auth.uid() = user_id);`;
+
+/* ============= SETTINGS MODAL ============= */
+function openSettings() {
+  const hasKey = !!settings.apiKey;
+  const aiOn = settings.aiEnabled !== false;
+  const supa = settings.supabase || {};
+  const supaConfigured = !!(supa.url && supa.anonKey);
+  const signedIn = !!sbUser;
+
+  openModal(`
+    <h2>Settings</h2>
+    <p class="lead">Power up your discovery experience.</p>
+    <div class="settings-form">
+
+      <!-- ===== iNATURALIST (PRIMARY) ===== -->
+      <div class="settings-section">
+        <h3>🍃 iNaturalist ID <span class="ai-pill" style="background:var(--plant-light)">PRIMARY</span></h3>
+        <p class="help">Free, accurate, trained on millions of AU observations. Try without a token first — only add one if you hit a 401 error.</p>
+        <label for="iNatToken">iNaturalist API token (optional)</label>
+        <input type="password" id="iNatToken" placeholder="eyJhbGciOi..." value="${settings.iNatToken || ''}" autocomplete="off" />
+        <div class="key-status ${settings.iNatToken ? 'ok' : 'warn'}">${settings.iNatToken ? '✓ Token saved' : 'Try anonymous first — get a token at inaturalist.org/users/api_token if needed'}</div>
+
+        <div class="toggle-row">
+          <div>
+            <div class="lbl">Use iNaturalist</div>
+            <div class="desc">Recommended — free and most accurate for AU flora</div>
+          </div>
+          <div class="switch ${settings.iNatEnabled !== false ? 'on' : ''}" id="iNatToggle"></div>
+        </div>
+      </div>
+
+      <!-- ===== CLAUDE (ENRICHMENT) ===== -->
+      <div class="settings-section">
+        <h3>🤖 Claude Vision <span class="ai-pill" style="background:var(--sandstone)">ENRICHMENT</span></h3>
+        <p class="help">Optional. With a Claude key, you get a short field-guide note on every ID. Or use it as a fallback when iNaturalist is off.</p>
+        <label for="apiKeyInput">Claude API Key</label>
+        <input type="password" id="apiKeyInput" placeholder="sk-ant-..." value="${settings.apiKey || ''}" autocomplete="off" />
+        ${hasKey
+          ? '<div class="key-status ok">✓ Key saved locally</div>'
+          : '<div class="key-status warn">No key — field-guide notes disabled</div>'}
+
+        <div class="toggle-row">
+          <div>
+            <div class="lbl">Enable Claude Vision</div>
+            <div class="desc">Adds field-guide notes; falls back to it if iNat fails</div>
+          </div>
+          <div class="switch ${aiOn && hasKey ? 'on' : ''}" id="aiToggle"></div>
+        </div>
+
+        <div class="toggle-row">
+          <div>
+            <div class="lbl">Prefer Claude over iNaturalist</div>
+            <div class="desc">Only if you specifically want Claude's reasoning over iNat's data</div>
+          </div>
+          <div class="switch ${settings.useClaudeAsPrimary ? 'on' : ''}" id="claudePrimaryToggle"></div>
+        </div>
+      </div>
+
+      <!-- ===== CLOUD SYNC SECTION ===== -->
+      <div class="settings-section">
+        <h3>☁️ Cloud sync</h3>
+        <p class="help">Sync your herbarium and mycarium across devices via Supabase.</p>
+
+        ${signedIn ? `
+          <div class="signed-in-banner">
+            <div>
+              <div>Signed in as</div>
+              <div class="who">${sbUser.email || sbUser.id.slice(0,8)}</div>
+            </div>
+            <button class="btn secondary" id="syncNowBtn" style="width:auto; padding:8px 14px; font-size:12px;">Sync now</button>
+          </div>
+          <button class="btn" id="signOutBtn" style="margin-top:10px; background:#a55045;">Sign out</button>
+        ` : `
+          <label for="supaUrl">Supabase URL</label>
+          <input type="text" id="supaUrl" placeholder="https://xxxx.supabase.co" value="${supa.url || ''}" autocomplete="off" />
+          <label for="supaKey" style="margin-top:8px; display:block;">Anon (public) key</label>
+          <input type="password" id="supaKey" placeholder="eyJhbGciOi..." value="${supa.anonKey || ''}" autocomplete="off" />
+          <button class="btn secondary" id="saveSupa" style="margin-top:10px;">Save Supabase config</button>
+
+          ${supaConfigured ? `
+            <div style="border-top:1px solid var(--line); margin-top:14px; padding-top:14px;">
+              <label for="emailInput">Sign in with email code</label>
+              <input type="email" id="emailInput" placeholder="you@example.com" value="${settings.lastEmail || ''}" />
+              <button class="btn" id="sendCodeBtn" style="margin-top:8px;">Send 6-digit code</button>
+              <div id="codeBlock" style="display:${settings.pendingEmail ? 'block' : 'none'}; margin-top:10px;">
+                <label for="codeInput">Enter the code from your email</label>
+                <input type="text" id="codeInput" placeholder="123456" inputmode="numeric" maxlength="6" />
+                <button class="btn" id="verifyBtn" style="margin-top:8px;">Verify & sign in</button>
+              </div>
+            </div>
+          ` : ''}
+
+          <details class="sql-help">
+            <summary>📋 First time? Run this SQL in your Supabase project</summary>
+            <pre id="sqlBlock">${SUPABASE_SQL.replace(/</g,'&lt;')}</pre>
+            <button class="copy-btn" id="copySql">Copy SQL</button>
+          </details>
+        `}
+      </div>
+
+      <p style="font-size:11px; color:var(--ink-soft); background:var(--sandstone); padding:10px; border-radius:8px; margin:0;">
+        🔐 All keys and tokens are stored only in this browser's localStorage. Calls go direct from your device.
+      </p>
+
+      <button class="btn" id="saveSettings">Save & close</button>
+      <button class="btn secondary" onclick="closeModal()">Cancel</button>
+      ${hasKey ? '<button class="btn" id="clearKey" style="background:#a55045;">Remove Claude key</button>' : ''}
+    </div>
+  `);
+
+  // ===== Toggles =====
+  const aiToggle = $('#aiToggle');
+  const iNatToggle = $('#iNatToggle');
+  const claudePrimaryToggle = $('#claudePrimaryToggle');
+
+  aiToggle?.addEventListener('click', () => {
+    if (!$('#apiKeyInput').value.trim()) return showToast('Add a Claude key first');
+    aiToggle.classList.toggle('on');
+  });
+  iNatToggle?.addEventListener('click', () => iNatToggle.classList.toggle('on'));
+  claudePrimaryToggle?.addEventListener('click', () => {
+    if (!$('#apiKeyInput').value.trim()) return showToast('Add a Claude key first');
+    claudePrimaryToggle.classList.toggle('on');
+  });
+
+  // ===== Save settings =====
+  $('#saveSettings').addEventListener('click', () => {
+    const newKey = $('#apiKeyInput').value.trim();
+    const newINatToken = $('#iNatToken').value.trim();
+    // Auto-enable Claude when key is provided (unless user explicitly turned it off)
+    const claudeWasExplicitlyOff = settings.apiKey && settings.aiEnabled === false && !aiToggle.classList.contains('on');
+    settings.apiKey = newKey || undefined;
+    settings.aiEnabled = newKey ? (aiToggle.classList.contains('on') || !claudeWasExplicitlyOff) : false;
+    settings.iNatToken = newINatToken || undefined;
+    settings.iNatEnabled = iNatToggle.classList.contains('on');
+    settings.useClaudeAsPrimary = newKey ? claudePrimaryToggle.classList.contains('on') : false;
+    saveSettings();
+    updateAIPill();
+    closeModal();
+    const summary = [];
+    if (settings.iNatEnabled) summary.push('iNat');
+    if (settings.apiKey && settings.aiEnabled) summary.push(settings.useClaudeAsPrimary ? 'Claude (primary)' : 'Claude (enrich)');
+    if (!summary.length) summary.push('demo');
+    showToast('✓ Saved — using: ' + summary.join(' + '));
+  });
+
+  // ===== Clear Claude key =====
+  $('#clearKey')?.addEventListener('click', () => {
+    delete settings.apiKey;
+    settings.aiEnabled = false;
+    saveSettings();
+    updateAIPill();
+    closeModal();
+    showToast('Key removed');
+  });
+
+  // ===== Save Supabase config =====
+  $('#saveSupa')?.addEventListener('click', () => {
+    const url = $('#supaUrl').value.trim().replace(/\/$/, '');
+    const anonKey = $('#supaKey').value.trim();
+    if (!url || !anonKey) return showToast('Both fields required');
+    settings.supabase = { url, anonKey };
+    saveSettings();
+    initSupabase();
+    openSettings(); // re-render so sign-in form appears
+    showToast('✓ Supabase configured');
+  });
+
+  // ===== Copy SQL =====
+  $('#copySql')?.addEventListener('click', () => {
+    navigator.clipboard.writeText(SUPABASE_SQL).then(() => showToast('SQL copied'));
+  });
+
+  // ===== Request OTP =====
+  $('#sendCodeBtn')?.addEventListener('click', async () => {
+    const email = $('#emailInput').value.trim();
+    if (!email || !email.includes('@')) return showToast('Enter a valid email');
+    const btn = $('#sendCodeBtn');
+    btn.disabled = true; btn.textContent = 'Sending...';
+    try {
+      await requestOtp(email);
+      settings.lastEmail = email;
+      settings.pendingEmail = email;
+      saveSettings();
+      $('#codeBlock').style.display = 'block';
+      showToast('Code sent — check your email');
+    } catch (e) {
+      showToast('Failed: ' + (e.message || 'unknown'));
+    } finally {
+      btn.disabled = false; btn.textContent = 'Resend code';
+    }
+  });
+
+  // ===== Verify OTP =====
+  $('#verifyBtn')?.addEventListener('click', async () => {
+    const email = $('#emailInput').value.trim() || settings.pendingEmail;
+    const code = $('#codeInput').value.trim();
+    if (!email || !code) return showToast('Enter the code');
+    const btn = $('#verifyBtn');
+    btn.disabled = true; btn.textContent = 'Verifying...';
+    try {
+      await verifyOtp(email, code);
+      delete settings.pendingEmail;
+      saveSettings();
+      closeModal();
+      showToast('✓ Signed in — syncing now');
+    } catch (e) {
+      showToast('Failed: ' + (e.message || 'wrong code?'));
+    } finally {
+      btn.disabled = false; btn.textContent = 'Verify & sign in';
+    }
+  });
+
+  // ===== Sign out =====
+  $('#signOutBtn')?.addEventListener('click', async () => {
+    if (!confirm('Sign out? Local discoveries stay on this device.')) return;
+    await signOutSupabase();
+    closeModal();
+    showToast('Signed out');
+  });
+
+  // ===== Sync now =====
+  $('#syncNowBtn')?.addEventListener('click', async () => {
+    const btn = $('#syncNowBtn');
+    btn.disabled = true; btn.textContent = 'Syncing...';
+    await backgroundSync();
+    btn.disabled = false; btn.textContent = 'Sync now';
+    showToast('✓ Synced');
+  });
+}
+
+function updateAIPill() {
+  const pill = $('#aiPill');
+  const claudeOn = !!(settings.apiKey && settings.aiEnabled !== false);
+  const iNatOn = settings.iNatEnabled !== false;
+
+  if (iNatOn && claudeOn) {
+    pill.textContent = 'iNAT+AI';
+    pill.style.display = 'inline-block';
+  } else if (iNatOn) {
+    pill.textContent = 'iNAT';
+    pill.style.display = 'inline-block';
+  } else if (claudeOn) {
+    pill.textContent = 'AI';
+    pill.style.display = 'inline-block';
+  } else {
+    pill.style.display = 'none';
+  }
+}
+
+window.openSettings = openSettings;
+$('#settingsBtn').addEventListener('click', openSettings);
+
+function showResult(species, photo, loc, suburb) {
+  // Non-native: don't count toward IDs limit, don't add to herbarium
+  if (species.isNonNative) {
+    openModal(`
+      <h2>Spotted, but not collected</h2>
+      <div class="id-photo-preview" style="background-image:url('${photo}')"></div>
+      <div class="nonnative-flag">
+        <b>Non-native species detected.</b><br/>
+        We identified <i>${species.sci}</i> (${species.name}). This species is not native to Australia, so we won't add it to your herbarium. The hunt continues — keep your eyes peeled for native flora!
+      </div>
+      <button class="btn" onclick="closeModal()">Got it</button>
+    `);
+    return;
+  }
+
+  // Count this ID
+  state.idsUsed++;
+
+  // Local legend? — first in this suburb to find this species
+  let isLocalLegend = false;
+  if (suburb) {
+    state.suburbsSeen[suburb] = state.suburbsSeen[suburb] || [];
+    if (!state.suburbsSeen[suburb].includes(species.id)) {
+      state.suburbsSeen[suburb].push(species.id);
+      isLocalLegend = true;
+    }
+  }
+
+  const xp = RARITY[species.rarity].xp;
+  const isFungi = species.kingdom === 'fungi';
+  const rarityLabel = RARITY[species.rarity].label;
+
+  // Slot limit check (free tier)
+  const reachedSlotLimit = !state.isPro && state.discoveries.length >= FREE_LIMITS.slots;
+
+  openModal(`
+    ${isFungi ? `
+      <div class="fungus-warning">
+        <span class="warn-icon">⚠️</span>
+        <div><b>Never eat wild fungi based on app identification alone.</b> This app is for observation and collection only.</div>
+      </div>
+    ` : ''}
+
+    <h2>${species.emoji || (isFungi ? '🍄' : '🌿')} ${species.name}</h2>
+    <p class="lead" style="font-style:italic">${species.sci}</p>
+
+    <div class="id-photo-preview" style="background-image:url('${photo}')">
+      <div class="kingdom-badge" style="position:absolute; top:12px; left:12px; background:rgba(0,0,0,0.65)">
+        ${isFungi ? 'Fungi · Kingdom Fungi' : 'Plant · Kingdom Plantae'}
+      </div>
+      <div class="kingdom-badge rarity-${species.rarity}" style="position:absolute; top:12px; right:12px; left:auto;">
+        ${rarityLabel}
+      </div>
+    </div>
+
+    <div class="xp-burst">
+      +${xp} XP
+      ${isLocalLegend ? '<div class="lg-tag">🏆 Local Legend — first in your suburb!</div>' : ''}
+    </div>
+
+    <div class="result-card" style="margin-bottom:12px; ${species.fellBackFromError ? 'border-left: 4px solid var(--ochre);' : ''}">
+      <div class="meta-lbl" style="font-size:10px; text-transform:uppercase; color:var(--muted); letter-spacing:1px; margin-bottom:4px;">
+        ${species.fellBackFromError ? '⚠ Demo result (real ID failed)' : species.source === 'inat' ? 'Identified by iNaturalist' : species.source === 'claude' ? 'Identified by Claude Vision' : 'Demo identification'}
+        ${species.confidence ? ` · ${species.confidence}% confidence` : ''}
+        ${species.rank && species.rank !== 'species' ? ` · ${species.rank}-level guess` : ''}
+      </div>
+      ${species.fellBackFromError
+        ? `<div style="font-size:12px; color:var(--ink-soft); line-height:1.4;">This is a randomized demo so you don't lose the find. Add an iNaturalist token or Claude key in settings for real identification.</div>`
+        : species.aiNotes
+        ? `<div style="font-size:13px; line-height:1.5;">${species.aiNotes}</div>`
+        : `<div style="font-size:12px; color:var(--ink-soft); line-height:1.4;">${species.source === 'inat' ? 'iNaturalist identified this from millions of citizen-science observations.' : species.source === 'claude' ? 'Claude analyzed this image directly.' : 'This is a randomized demo identification.'}</div>`
+      }
+    </div>
+
+    <div class="result-meta">
+      <div class="meta-item">
+        <div class="meta-lbl">Kingdom</div>
+        <div class="meta-val">${isFungi ? 'Fungi' : 'Plantae'}</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-lbl">Rarity</div>
+        <div class="meta-val">${rarityLabel}</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-lbl">Location</div>
+        <div class="meta-val">${loc ? `${loc.lat.toFixed(3)}, ${loc.lng.toFixed(3)}` : 'Unknown'}</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-lbl">Date</div>
+        <div class="meta-val">${new Date().toLocaleDateString()}</div>
+      </div>
+    </div>
+
+    ${reachedSlotLimit ? `
+      <div class="nonnative-flag" style="margin-top:14px"><b>Herbarium full!</b> Your free 10 slots are taken — upgrade to keep collecting.</div>
+      <button class="btn" onclick="closeModal(); showUpgradeModal()">See upgrade options</button>
+    ` : `
+      <button class="btn" id="btnAddToCollection" style="margin-top:14px">Add to ${isFungi ? 'Mycarium' : 'Herbarium'}</button>
+    `}
+    <button class="btn secondary" onclick="closeModal()" style="margin-top:8px">Discard</button>
+  `);
+
+  if (!reachedSlotLimit) {
+    let added = false;
+    const btn = $('#btnAddToCollection');
+    btn.addEventListener('click', () => {
+      if (added) return;       // guard against rapid double-clicks
+      added = true;
+      btn.disabled = true;     // visual feedback + native click block
+      btn.textContent = 'Added ✓';
+      addDiscovery(species, photo, loc, suburb, isLocalLegend);
+      closeModal();
+      showToast(`+${xp} XP — added to ${isFungi ? 'Mycarium' : 'Herbarium'}`);
+    }, { once: true });        // belt-and-braces: listener auto-removes after first fire
+  }
+  saveState();
+  updateHeader();
+}
+
+function addDiscovery(species, photo, loc, suburb, isLocalLegend) {
+  const discovery = {
+    id: uid(),
+    speciesId: species.id,
+    name: species.name,
+    sci: species.sci,
+    kingdom: species.kingdom,
+    rarity: species.rarity,
+    emoji: species.emoji,
+    photo,
+    lat: loc?.lat,
+    lng: loc?.lng,
+    suburb,
+    isLocalLegend,
+    ts: Date.now(),
+  };
+  state.discoveries.push(discovery);
+  saveState();
+  checkBadges();
+  updateHeader();
+  renderRecent();
+  // Fire-and-forget cloud push if signed in
+  if (sbUser) syncPush(discovery);
+}
+
+/* ============= BADGES ============= */
+function checkBadges() {
+  const stats = getStats();
+  let newBadges = [];
+  BADGES.forEach(b => {
+    if (b.check(stats) && !state.badges.includes(b.id)) {
+      state.badges.push(b.id);
+      newBadges.push(b);
+    }
+  });
+  saveState();
+  if (newBadges.length) {
+    setTimeout(() => {
+      newBadges.forEach((b, i) => {
+        setTimeout(() => showToast(`🏅 Badge unlocked: ${b.name}!`, 2800), i * 800);
+      });
+    }, 600);
+  }
+}
+
+/* ============= HEADER & FREEMIUM ============= */
+function updateHeader() {
+  const pill = $('#tierPill');
+  if (state.isPro) {
+    pill.innerHTML = '🌟 PRO';
+    pill.style.background = 'linear-gradient(135deg, var(--ochre), var(--rust))';
+    pill.style.borderColor = 'transparent';
+  } else {
+    pill.innerHTML = '<span id="idCount">' + state.idsUsed + '</span>/<span id="idLimit">' + FREE_LIMITS.ids + '</span> IDs';
+    pill.style.background = '';
+    pill.style.borderColor = '';
+  }
+}
+
+function showUpgradeModal() {
+  openModal(`
+    <h2>${state.isPro ? '🌟 You\'re Pro!' : 'Unlock Plant Parent Pro'}</h2>
+    <p class="lead">${state.isPro ? 'Enjoy unlimited everything.' : 'Free tier hit — time to upgrade.'}</p>
+    <div style="background:linear-gradient(135deg, var(--ochre), var(--rust)); color:white; border-radius:14px; padding:20px; margin:14px 0;">
+      <div style="font-weight:700; font-size:18px; margin-bottom:6px;">🌟 Plant Parent Pro</div>
+      <ul style="margin:8px 0 0; padding-left:20px; font-size:14px; line-height:1.7;">
+        <li>Unlimited species identifications</li>
+        <li>Unlimited herbarium & mycarium slots</li>
+        <li>Rarity insights & seasonal forecasts</li>
+        <li>Field guide companion mode</li>
+        <li>Export your collection as PDF</li>
+      </ul>
+    </div>
+    ${state.isPro
+      ? '<button class="btn secondary" onclick="closeModal()">Back to discovery</button>'
+      : `<p style="font-size:11px; color:var(--ink-soft); background:var(--sandstone); padding:10px; border-radius:8px; margin:0 0 12px;">No payment processing in this MVP — Pro is free during the research preview.</p>
+         <button class="btn" id="btnUnlockPro">Unlock Pro (free during preview)</button>
+         <button class="btn secondary" onclick="closeModal()" style="margin-top:8px">Back to discovery</button>`
+    }
+  `);
+
+  $('#btnUnlockPro')?.addEventListener('click', () => {
+    state.isPro = true;
+    saveState();
+    updateHeader();
+    if ($('#view-profile').classList.contains('active')) renderProfile();
+    closeModal();
+    showToast('🌟 Pro unlocked — unlimited everything!', 3000);
+  });
+}
+
+/* ============= DISCOVER — RECENT ============= */
+function renderRecent() {
+  const grid = $('#recentGrid');
+  const recent = state.discoveries.slice(-6).reverse();
+  let html = '';
+  for (let i = 0; i < 6; i++) {
+    const d = recent[i];
+    if (d) {
+      html += `<div class="recent-tile" data-id="${d.id}" style="background-image:url('${d.photo}')">
+        <div class="rarity-dot dot-${d.rarity}"></div>
+      </div>`;
+    } else {
+      html += `<div class="recent-tile empty">+</div>`;
+    }
+  }
+  grid.innerHTML = html;
+  $$('.recent-tile[data-id]', grid).forEach(t => {
+    t.addEventListener('click', () => showDetail(t.dataset.id));
+  });
+}
+
+/* ============= COLLECTION VIEW ============= */
+let activeKingdom = 'all';
+$$('.tabs .tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    $$('.tabs .tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    activeKingdom = tab.dataset.kingdom;
+    $('#view-collection').classList.toggle('fungi-theme', activeKingdom === 'fungi');
+    renderCollection();
+  });
+});
+
+function renderCollection() {
+  const stats = getStats();
+  $('#statPlants').textContent = stats.plants;
+  $('#statFungi').textContent = stats.fungi;
+  $('#statRare').textContent = stats.rareCount + stats.legendaryCount;
+
+  const filtered = activeKingdom === 'all'
+    ? state.discoveries
+    : state.discoveries.filter(d => d.kingdom === activeKingdom);
+
+  const sorted = [...filtered].sort((a, b) => b.ts - a.ts);
+
+  // Slot limit visualization
+  const totalSlots = state.isPro ? sorted.length : FREE_LIMITS.slots;
+  const empties = state.isPro ? 0 : Math.max(0, FREE_LIMITS.slots - state.discoveries.length);
+  const grid = $('#collectionGrid');
+
+  if (sorted.length === 0 && empties === 0) {
+    grid.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:40px 20px; color:var(--ink-soft);">
+      <div style="font-size:48px; margin-bottom:8px">🌿</div>
+      <div style="font-weight:600; margin-bottom:4px;">No finds yet</div>
+      <div style="font-size:13px;">Tap Discover to start your collection</div>
+    </div>`;
+    return;
+  }
+
+  let html = sorted.map(d => `
+    <div class="collection-card" data-id="${d.id}">
+      <div class="photo" style="background-image:url('${d.photo}')">
+        <div class="kingdom-badge">${d.kingdom === 'fungi' ? '🍄 Fungi' : '🌿 Plant'}</div>
+      </div>
+      <div class="info">
+        <div class="name">${d.name}</div>
+        <div class="sci">${d.sci}</div>
+        <div class="rarity-tag rarity-${d.rarity}">${RARITY[d.rarity].label}</div>
+      </div>
+    </div>
+  `).join('');
+
+  // Empty slots only on "All" tab
+  if (activeKingdom === 'all') {
+    for (let i = 0; i < empties; i++) {
+      html += `<div class="empty-slot">
+        <div class="photo"><div class="silhouette">🌿</div></div>
+        <div class="info"><div>Empty slot</div></div>
+      </div>`;
+    }
+  }
+
+  grid.innerHTML = html;
+  $$('.collection-card', grid).forEach(c => {
+    c.addEventListener('click', () => showDetail(c.dataset.id));
+  });
+}
+
+function showDetail(id) {
+  const d = state.discoveries.find(x => x.id === id);
+  if (!d) return;
+  const isFungi = d.kingdom === 'fungi';
+  openModal(`
+    ${isFungi ? `
+      <div class="fungus-warning">
+        <span class="warn-icon">⚠️</span>
+        <div><b>Never eat wild fungi based on app identification alone.</b> This app is for observation and collection only.</div>
+      </div>
+    ` : ''}
+    <h2>${d.name}</h2>
+    <p class="lead" style="font-style:italic">${d.sci}</p>
+    <div class="detail-photo" style="background-image:url('${d.photo}')"></div>
+    <div class="result-meta">
+      <div class="meta-item"><div class="meta-lbl">Kingdom</div><div class="meta-val">${isFungi ? 'Fungi' : 'Plantae'}</div></div>
+      <div class="meta-item"><div class="meta-lbl">Rarity</div><div class="meta-val">${RARITY[d.rarity].label}</div></div>
+      <div class="meta-item"><div class="meta-lbl">XP earned</div><div class="meta-val">+${RARITY[d.rarity].xp}</div></div>
+      <div class="meta-item"><div class="meta-lbl">Found</div><div class="meta-val">${new Date(d.ts).toLocaleDateString()}</div></div>
+      <div class="meta-item" style="grid-column:1/-1"><div class="meta-lbl">Location</div><div class="meta-val">${d.lat ? `${d.lat.toFixed(4)}, ${d.lng.toFixed(4)}` : 'Unknown'}${d.suburb ? ` · ${d.suburb}` : ''}</div></div>
+    </div>
+    ${d.isLocalLegend ? '<div class="xp-burst" style="margin-top:14px;">🏆 Local Legend find</div>' : ''}
+    <button class="btn secondary" onclick="closeModal()" style="margin-top:14px">Close</button>
+    <button class="btn" style="margin-top:8px; background:#a55045;" onclick="deleteDiscovery('${d.id}')">Remove from collection</button>
+  `);
+}
+
+function deleteDiscovery(id) {
+  if (!confirm('Remove this from your collection? This cannot be undone.')) return;
+  state.discoveries = state.discoveries.filter(d => d.id !== id);
+  saveState();
+  closeModal();
+  renderCollection();
+  renderRecent();
+  updateHeader();
+  showToast('Removed from collection');
+  // Fire-and-forget cloud delete if signed in
+  if (sbUser) syncDelete(id);
+}
+window.deleteDiscovery = deleteDiscovery; // expose for inline onclick
+
+/* ============= PROFILE VIEW ============= */
+function renderProfile() {
+  const stats = getStats();
+  const lvl = getLevel(stats.xp);
+  $('#profileLevel').textContent = lvl.level;
+  $('#profileXP').textContent = stats.xp;
+  $('#xpToNext').textContent = lvl.neededXP - lvl.currentXP;
+  $('#xpFill').style.width = `${(lvl.currentXP / lvl.neededXP) * 100}%`;
+
+  // Freemium / Pro card
+  const fmCard = $('#freemiumCard');
+  if (state.isPro) {
+    fmCard.style.background = 'linear-gradient(135deg, var(--ochre), var(--rust))';
+    fmCard.innerHTML = `
+      <div class="fm-title" style="color:white; display:flex; align-items:center; gap:8px;">🌟 Plant Parent Pro</div>
+      <div style="color:rgba(255,255,255,0.95); font-size:13px; margin-top:4px;">Unlimited IDs · Unlimited slots · All Pro features unlocked</div>
+      <button class="btn secondary" id="downgradeBtn" style="margin-top:10px; background:rgba(255,255,255,0.2); color:white; border:1px solid rgba(255,255,255,0.4);">Switch back to free tier</button>
+    `;
+    $('#downgradeBtn')?.addEventListener('click', () => {
+      if (!confirm('Switch back to free tier? Your discoveries stay but new IDs will be limited.')) return;
+      state.isPro = false;
+      saveState();
+      updateHeader();
+      renderProfile();
+      showToast('Switched to free tier');
+    });
+  } else {
+    fmCard.style.background = '';
+    fmCard.innerHTML = `
+      <div class="fm-title">Free tier</div>
+      <div class="freemium-progress"><div class="freemium-progress-fill" id="freemiumFill" style="width:0%"></div></div>
+      <div class="fm-meta">
+        <span><span id="fmIdsUsed">0</span>/10 IDs used</span>
+        <span><span id="fmSlotsUsed">0</span>/10 slots used</span>
+      </div>
+      <button class="btn" id="upgradeBtn" style="margin-top:12px;">Unlock Pro</button>
+    `;
+    $('#fmIdsUsed').textContent = state.idsUsed;
+    $('#fmSlotsUsed').textContent = state.discoveries.length;
+    const usagePct = Math.max(state.idsUsed, state.discoveries.length) / FREE_LIMITS.ids * 100;
+    $('#freemiumFill').style.width = Math.min(100, usagePct) + '%';
+    $('#upgradeBtn')?.addEventListener('click', showUpgradeModal);
+  }
+
+  // Badges
+  $('#badgesGrid').innerHTML = BADGES.map(b => `
+    <div class="badge ${state.badges.includes(b.id) ? '' : 'locked'}">
+      <span class="b-icon">${b.icon}</span>
+      <div class="b-name">${b.name}</div>
+      <div class="b-desc">${b.desc}</div>
+    </div>
+  `).join('');
+}
+
+/* ============= MAP VIEW ============= */
+let map, markersLayer;
+function initOrUpdateMap() {
+  if (!map) {
+    map = L.map('map', { zoomControl: true, attributionControl: false }).setView([-25.27, 133.78], 4);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '© OpenStreetMap'
+    }).addTo(map);
+    markersLayer = L.layerGroup().addTo(map);
+
+    // Center on user if possible
+    getLocation().then(loc => {
+      if (loc) map.setView([loc.lat, loc.lng], 12);
+    });
+  }
+  markersLayer.clearLayers();
+
+  const withCoords = state.discoveries.filter(d => d.lat && d.lng);
+  withCoords.forEach(d => {
+    const isFungi = d.kingdom === 'fungi';
+    const color = isFungi ? '#5d3f2c' : '#4a6741';
+    const icon = L.divIcon({
+      className: '',
+      html: `<div class="marker-pin" style="background:${color};">${isFungi ? '🍄' : '🌿'}</div>`,
+      iconSize: [32, 32],
+      iconAnchor: [16, 16]
+    });
+    const m = L.marker([d.lat, d.lng], { icon }).addTo(markersLayer);
+    m.bindPopup(`
+      <div style="text-align:center; min-width:160px;">
+        <div style="width:100%; height:80px; background:url('${d.photo}') center/cover; border-radius:8px; margin-bottom:8px"></div>
+        <div style="font-weight:700">${d.name}</div>
+        <div style="font-style:italic; color:#888; font-size:12px">${d.sci}</div>
+        <div style="margin-top:6px;"><span class="rarity-tag rarity-${d.rarity}" style="font-size:10px; padding:2px 8px; border-radius:999px;">${RARITY[d.rarity].label}</span></div>
+      </div>
+    `);
+  });
+
+  if (withCoords.length === 0) {
+    map.setView([-25.27, 133.78], 4); // Center of Australia
+  }
+  setTimeout(() => map.invalidateSize(), 200);
+}
+
+/* ============= ONBOARDING ============= */
+function maybeShowOnboarding() {
+  if (localStorage.getItem('plantparent.onboarded')) return;
+  openModal(`
+    <h2>Welcome to Plant Parent 🌿</h2>
+    <p class="lead">A treasure hunt for rare Australian native plants and fungi.</p>
+    <ol style="padding-left:20px; line-height:1.8; font-size:14px;">
+      <li><b>Snap a photo</b> of any plant or fungus you see</li>
+      <li>We'll <b>identify</b> the species and tag its rarity</li>
+      <li>Add it to your <b>Herbarium</b> (plants) or <b>Mycarium</b> (fungi)</li>
+      <li>Earn XP, unlock badges, become a Local Legend</li>
+    </ol>
+    <p style="font-size:12px; color:var(--ink-soft); background:var(--sandstone); padding:10px; border-radius:8px; margin:12px 0">
+      <b>Free tier:</b> 10 lifetime IDs and 10 collection slots. Upgrade for unlimited.
+    </p>
+    <p style="font-size:12px; color:var(--rust); padding:10px; border:1px solid var(--rust); border-radius:8px;">
+      ⚠️ <b>Safety:</b> Never eat wild fungi based on app identification alone. This app is for observation only.
+    </p>
+    <button class="btn" id="btnGetStarted">Start hunting</button>
+  `);
+  $('#btnGetStarted').addEventListener('click', () => {
+    localStorage.setItem('plantparent.onboarded', '1');
+    closeModal();
+  });
+}
+
+/* ============= INIT ============= */
+function init() {
+  updateHeader();
+  updateAIPill();
+  initSupabase();
+  renderRecent();
+  maybeShowOnboarding();
+}
+init();
+
+// Dev helper: window.PP exposes state for inspection
+window.PP = { state, saveState, SPECIES, BADGES, RARITY, reset: () => {
+  if (confirm('Reset all data?')) { localStorage.clear(); location.reload(); }
+} };
+</script>
+</body>
+</html>
