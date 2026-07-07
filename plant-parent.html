@@ -1184,7 +1184,7 @@ const BADGES = [
 
 /* ============= STATE ============= */
 const FREE_LIMITS = { ids: 10, slots: 10 };
-const CLAUDE_MODEL = 'claude-sonnet-4-6';
+const CLAUDE_MODEL = 'claude-sonnet-5';
 let state = loadState();
 let settings = loadSettings();
 
@@ -1757,7 +1757,10 @@ Write ONE short field-guide note about this species — distinctive features, ha
 
   if (!res.ok) throw new Error(`Enrichment failed: ${res.status}`);
   const data = await res.json();
-  return (data.content?.[0]?.text || '').trim().replace(/^["']|["']$/g, '');
+  // Find the text block — with adaptive thinking the first block may be a
+  // thinking block, so content[0] isn't guaranteed to be the text
+  const text = (data.content || []).find(b => b.type === 'text')?.text || '';
+  return text.trim().replace(/^["']|["']$/g, '');
 }
 
 /* ============= CLAUDE VISION (fallback / primary if no iNat) ============= */
@@ -1815,7 +1818,9 @@ Rules:
     throw new Error(`API ${res.status}: ${txt}`);
   }
   const data = await res.json();
-  const text = (data.content?.[0]?.text || '').trim();
+  // Find the text block — with adaptive thinking the first block may be a
+  // thinking block, so content[0] isn't guaranteed to be the text
+  const text = ((data.content || []).find(b => b.type === 'text')?.text || '').trim();
   // Try to peel out JSON if Claude wrapped it
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   const raw = jsonMatch ? jsonMatch[0] : text;
