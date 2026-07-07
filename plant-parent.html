@@ -795,6 +795,44 @@
     50% { top: calc(100% - 3px); }
   }
 
+  /* Live camera capture */
+  .camera-stage {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 3 / 4;
+    background: var(--ink);
+    border-radius: 16px;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+  .camera-stage video {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .camera-stage .camera-hint {
+    position: absolute;
+    top: 12px; left: 12px; right: 12px;
+    text-align: center;
+    color: white;
+    font-size: 12px;
+    font-weight: 600;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+    pointer-events: none;
+  }
+  .shutter-row { display: flex; justify-content: center; margin-bottom: 4px; }
+  .shutter-btn {
+    width: 72px; height: 72px;
+    border-radius: 50%;
+    border: 4px solid var(--plant-mist);
+    background: var(--plant-mid);
+    cursor: pointer;
+    transition: transform 0.1s, opacity 0.2s;
+    box-shadow: 0 4px 16px rgba(45,74,43,0.35);
+  }
+  .shutter-btn:active { transform: scale(0.92); }
+  .shutter-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
   .result-card {
     background: var(--bg-cream);
     border-radius: 16px;
@@ -1146,7 +1184,7 @@ const BADGES = [
 
 /* ============= STATE ============= */
 const FREE_LIMITS = { ids: 10, slots: 10 };
-const CLAUDE_MODEL = 'claude-sonnet-4-6';
+const CLAUDE_MODEL = 'claude-sonnet-5';
 let state = loadState();
 let settings = loadSettings();
 
@@ -1242,11 +1280,51 @@ function getLocation() {
   });
 }
 
-async function reverseGeocode(lat, lng) {
-  // Pseudo-suburb derived from rounded coords (deterministic, no API call needed for MVP)
-  // Real-world: use Nominatim or similar
+/* ---- Reverse geocoding (Nominatim) ----
+   Design note: the Local Legend "first in your suburb" mechanic keeps using
+   the deterministic coordinate-sector key (coordSector) rather than the real
+   suburb name — it works offline, never shifts when Nominatim's answer
+   changes, and keeps every existing user's suburbsSeen data valid. The real
+   suburb name is what gets stored on the discovery and displayed. */
+function coordSector(lat, lng) {
   const r = (n) => Math.round(n * 100) / 100;
   return `Sector ${r(lat)},${r(lng)}`;
+}
+
+// Cache geocode results by ~100m-rounded coordinate so repeat finds in the
+// same spot don't re-hit the API (Nominatim's usage policy asks for restraint)
+let geocodeCache = {};
+try { geocodeCache = JSON.parse(localStorage.getItem('plantparent.geocache') || '{}'); } catch {}
+
+async function reverseGeocode(lat, lng) {
+  const cacheKey = `${Math.round(lat * 1000) / 1000},${Math.round(lng * 1000) / 1000}`;
+  if (geocodeCache[cacheKey]) return geocodeCache[cacheKey];
+  try {
+    // zoom=14 asks for suburb-level detail. Browsers attach this page's
+    // Origin/Referer automatically, which serves as the app identification
+    // Nominatim's policy requires (a custom User-Agent isn't settable in JS).
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 5000); // never stall the ID flow
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=14`,
+      { headers: { 'Accept': 'application/json' }, signal: ctrl.signal }
+    );
+    clearTimeout(timer);
+    if (!res.ok) throw new Error(`Nominatim ${res.status}`);
+    const data = await res.json();
+    const a = data.address || {};
+    // Suburb-ish keys in rough order of usefulness for Australian addresses
+    const name = a.suburb || a.locality || a.village || a.town || a.city_district
+      || a.hamlet || a.municipality || a.city || null;
+    if (!name) throw new Error('no suburb-level field in response');
+    geocodeCache[cacheKey] = name;
+    try { localStorage.setItem('plantparent.geocache', JSON.stringify(geocodeCache)); } catch {}
+    return name;
+  } catch (e) {
+    // Degrade quietly to the coordinate sector — never block identification
+    console.warn('[PP] Reverse geocode fell back to sector:', e.message);
+    return coordSector(lat, lng);
+  }
 }
 
 /* ============= MODAL ============= */
@@ -1259,6 +1337,7 @@ function openModal(html) {
 }
 function closeModal() {
   console.log('[PP] closeModal');
+  stopCameraStream(); // never leave the camera running behind a closed modal
   $('#modal').classList.remove('show');
   document.body.style.overflow = '';
 }
@@ -1294,10 +1373,17 @@ $('#snapBtn').addEventListener('click', () => {
   // Make sure no lingering modal state is blocking interaction
   document.body.style.overflow = '';
   $('#modal').classList.remove('show');
+  openCameraCapture();
+});
+
+// Legacy capture path — only used when a live getUserMedia stream isn't possible
+function fallbackToFileCapture(reason) {
+  if (reason) showToast(reason, 3200);
+  console.warn('[PP] Camera fallback:', reason || 'user requested');
   const input = $('#cameraInput');
   input.value = ''; // Force-reset BEFORE picker opens
   input.click();
-});
+}
 
 $('#cameraInput').addEventListener('change', e => {
   console.log('[PP] Change event, files:', e.target.files?.length);
@@ -1322,6 +1408,100 @@ function handlePhoto(file) {
     showToast('Could not read the photo file');
   };
   reader.readAsDataURL(file);
+}
+
+/* ============= LIVE CAMERA CAPTURE ============= */
+// capture="environment" on the file input is only a hint — desktop browsers
+// still show a file picker. Where the browser supports it we open a real
+// getUserMedia() stream instead, so photos can only come from a live feed.
+// The file input stays as the documented fallback (no camera, denied, http).
+let cameraStream = null;
+
+function stopCameraStream() {
+  if (!cameraStream) return;
+  cameraStream.getTracks().forEach(t => t.stop());
+  cameraStream = null;
+}
+
+async function openCameraCapture() {
+  // Freemium gate — mirrors the check handlePhoto applies on the fallback path
+  if (!state.isPro && state.idsUsed >= FREE_LIMITS.ids) {
+    return showUpgradeModal();
+  }
+  if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+    return fallbackToFileCapture("Camera access unavailable — using your device's photo capture instead");
+  }
+
+  openModal(`
+    <h2>Snap your find</h2>
+    <p class="lead">Line it up — foliage, flowers or fruiting bodies work best.</p>
+    <div class="camera-stage">
+      <video id="cameraFeed" autoplay playsinline muted></video>
+      <div class="camera-hint" id="cameraHint">Starting camera…</div>
+    </div>
+    <div class="shutter-row">
+      <button class="shutter-btn" id="shutterBtn" aria-label="Take photo" disabled></button>
+    </div>
+    <button class="btn secondary" onclick="closeModal()" style="margin-top:12px">Cancel</button>
+  `);
+
+  try {
+    // ideal (not exact) facingMode: rear camera when available, but devices
+    // with a single front camera still get a stream instead of an error
+    cameraStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1440 } },
+      audio: false,
+    });
+  } catch (err) {
+    console.warn('[PP] getUserMedia failed:', err.name, err.message);
+    if (err.name === 'NotAllowedError' || err.name === 'SecurityError') {
+      return showCameraDeniedModal();
+    }
+    // No camera hardware, camera busy, etc. — fall back rather than dead-end
+    closeModal();
+    return fallbackToFileCapture("Camera access unavailable — using your device's photo capture instead");
+  }
+
+  const video = $('#cameraFeed');
+  if (!video) { stopCameraStream(); return; } // modal was dismissed while the permission prompt was up
+  video.srcObject = cameraStream;
+  video.addEventListener('loadedmetadata', () => {
+    const hint = $('#cameraHint'); if (hint) hint.textContent = '';
+    const btn = $('#shutterBtn'); if (btn) btn.disabled = false;
+  }, { once: true });
+
+  let captured = false;
+  $('#shutterBtn').addEventListener('click', () => {
+    if (captured || !cameraStream) return; // guard against rapid double-taps
+    captured = true;
+    const canvas = document.createElement('canvas');
+    // Cap the long edge so the base64 payload stays localStorage-friendly
+    const scale = Math.min(1, 1600 / Math.max(video.videoWidth, video.videoHeight));
+    canvas.width = Math.round(video.videoWidth * scale);
+    canvas.height = Math.round(video.videoHeight * scale);
+    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    stopCameraStream();
+    closeModal();
+    startIdentification(dataUrl); // same data-URL shape the FileReader path produces
+  }, { once: true });
+}
+
+function showCameraDeniedModal() {
+  stopCameraStream();
+  openModal(`
+    <h2>Camera access needed</h2>
+    <p class="lead">Plant Parent identifies live finds only, so it needs your camera.</p>
+    <div class="nonnative-flag">
+      <b>Camera permission was denied.</b><br/>
+      Allow camera access for this site in your browser settings, then try again.
+      If this device has no camera, you can use your device's own photo capture instead.
+    </div>
+    <button class="btn" id="btnRetryCamera">Try again</button>
+    <button class="btn secondary" id="btnCameraFallback" style="margin-top:8px">Use device capture instead</button>
+  `);
+  $('#btnRetryCamera').addEventListener('click', () => { closeModal(); openCameraCapture(); });
+  $('#btnCameraFallback').addEventListener('click', () => { closeModal(); fallbackToFileCapture(); });
 }
 
 async function startIdentification(photoDataUrl) {
@@ -1577,7 +1757,10 @@ Write ONE short field-guide note about this species — distinctive features, ha
 
   if (!res.ok) throw new Error(`Enrichment failed: ${res.status}`);
   const data = await res.json();
-  return (data.content?.[0]?.text || '').trim().replace(/^["']|["']$/g, '');
+  // Find the text block — with adaptive thinking the first block may be a
+  // thinking block, so content[0] isn't guaranteed to be the text
+  const text = (data.content || []).find(b => b.type === 'text')?.text || '';
+  return text.trim().replace(/^["']|["']$/g, '');
 }
 
 /* ============= CLAUDE VISION (fallback / primary if no iNat) ============= */
@@ -1635,7 +1818,9 @@ Rules:
     throw new Error(`API ${res.status}: ${txt}`);
   }
   const data = await res.json();
-  const text = (data.content?.[0]?.text || '').trim();
+  // Find the text block — with adaptive thinking the first block may be a
+  // thinking block, so content[0] isn't guaranteed to be the text
+  const text = ((data.content || []).find(b => b.type === 'text')?.text || '').trim();
   // Try to peel out JSON if Claude wrapped it
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   const raw = jsonMatch ? jsonMatch[0] : text;
@@ -1681,6 +1866,36 @@ function mapClaudeToSpecies(c) {
 let sb = null;        // supabase client
 let sbUser = null;    // current user object
 let syncing = false;
+const PHOTO_BUCKET = 'discovery-photos';
+
+/* ---- Photo storage ----
+   Synced photos live in a Storage bucket; the discoveries.photo column only
+   stores the object path ({user_id}/{discovery_id}.jpg). The bucket is public
+   for reads: pulls stay a single query with no per-row signed-URL round-trips,
+   at the cost of photos being readable by anyone holding the URL — fine for
+   field snapshots, and consistent with the no-redirect-URL auth approach.
+   Legacy rows that still carry base64 data URLs keep rendering unchanged, and
+   local-only (not signed in) discoveries keep base64 in localStorage as before. */
+function photoStoragePath(discoveryId) {
+  return `${sbUser.id}/${discoveryId}.jpg`;
+}
+
+function resolvePhotoUrl(photo) {
+  // Storage path → public URL; base64 data URLs and full URLs pass through
+  if (!photo || photo.startsWith('data:') || photo.startsWith('http')) return photo;
+  return sb.storage.from(PHOTO_BUCKET).getPublicUrl(photo).data.publicUrl;
+}
+
+async function uploadPhotoToStorage(discovery) {
+  const path = photoStoragePath(discovery.id);
+  const blob = await (await fetch(discovery.photo)).blob();
+  const { error } = await sb.storage.from(PHOTO_BUCKET).upload(path, blob, {
+    upsert: true,
+    contentType: blob.type || 'image/jpeg',
+  });
+  if (error) throw error;
+  return path;
+}
 
 function initSupabase() {
   if (!window.supabase) return;
@@ -1742,6 +1957,13 @@ async function signOutSupabase() {
 async function syncPush(discovery) {
   if (!sb || !sbUser) return false;
   try {
+    // Upload the photo blob to Storage first; the row only carries the path.
+    // If the upload throws, the whole push fails and is retried on the next
+    // backgroundSync — we never fall back to stuffing base64 into the row.
+    let photoValue = discovery.photo;
+    if (photoValue && photoValue.startsWith('data:')) {
+      photoValue = await uploadPhotoToStorage(discovery);
+    }
     const row = {
       id: discovery.id,
       user_id: sbUser.id,
@@ -1751,7 +1973,7 @@ async function syncPush(discovery) {
       kingdom: discovery.kingdom,
       rarity: discovery.rarity,
       emoji: discovery.emoji || null,
-      photo: discovery.photo,
+      photo: photoValue,
       lat: discovery.lat,
       lng: discovery.lng,
       suburb: discovery.suburb,
@@ -1773,6 +1995,11 @@ async function syncDelete(id) {
   try {
     const { error } = await sb.from('discoveries').delete().eq('id', id);
     if (error) throw error;
+    // Remove the Storage object too so files don't orphan. Paths are
+    // deterministic ({user_id}/{id}.jpg) so we don't need the row back;
+    // legacy base64-only rows simply have no object to remove.
+    const { error: rmError } = await sb.storage.from(PHOTO_BUCKET).remove([photoStoragePath(id)]);
+    if (rmError) console.warn('Photo cleanup failed (row already deleted):', rmError.message);
     return true;
   } catch (e) {
     console.error('Sync delete failed:', e);
@@ -1792,7 +2019,7 @@ async function syncPull() {
     kingdom: r.kingdom,
     rarity: r.rarity,
     emoji: r.emoji,
-    photo: r.photo,
+    photo: resolvePhotoUrl(r.photo),
     lat: r.lat,
     lng: r.lng,
     suburb: r.suburb,
@@ -1842,7 +2069,7 @@ create table if not exists discoveries (
   kingdom text not null,
   rarity text not null,
   emoji text,
-  photo text,
+  photo text, -- Storage path ({user_id}/{discovery_id}.jpg); legacy rows may hold a base64 data URL
   lat float8,
   lng float8,
   suburb text,
@@ -1859,7 +2086,26 @@ drop policy if exists "delete own" on discoveries;
 
 create policy "read own"   on discoveries for select using (auth.uid() = user_id);
 create policy "insert own" on discoveries for insert with check (auth.uid() = user_id);
-create policy "delete own" on discoveries for delete using (auth.uid() = user_id);`;
+create policy "delete own" on discoveries for delete using (auth.uid() = user_id);
+
+-- Photo storage bucket. Photos are uploaded as {user_id}/{discovery_id}.jpg
+-- and the discoveries.photo column stores that path (not the image itself).
+-- The bucket is PUBLIC for reads (simple, no signed-URL churn); writes and
+-- deletes are locked to each user's own {user_id}/ folder.
+insert into storage.buckets (id, name, public)
+values ('discovery-photos', 'discovery-photos', true)
+on conflict (id) do nothing;
+
+drop policy if exists "photos insert own" on storage.objects;
+drop policy if exists "photos update own" on storage.objects;
+drop policy if exists "photos delete own" on storage.objects;
+
+create policy "photos insert own" on storage.objects for insert
+  with check (bucket_id = 'discovery-photos' and auth.uid()::text = (storage.foldername(name))[1]);
+create policy "photos update own" on storage.objects for update
+  using (bucket_id = 'discovery-photos' and auth.uid()::text = (storage.foldername(name))[1]);
+create policy "photos delete own" on storage.objects for delete
+  using (bucket_id = 'discovery-photos' and auth.uid()::text = (storage.foldername(name))[1]);`;
 
 /* ============= SETTINGS MODAL ============= */
 function openSettings() {
@@ -2131,12 +2377,16 @@ function showResult(species, photo, loc, suburb) {
   // Count this ID
   state.idsUsed++;
 
-  // Local legend? — first in this suburb to find this species
+  // Local legend? — first in this area to find this species. Keyed off the
+  // deterministic coordinate sector, not the display suburb (see the
+  // reverse-geocoding note) — this also keeps pre-Nominatim suburbsSeen
+  // entries valid with no migration.
   let isLocalLegend = false;
-  if (suburb) {
-    state.suburbsSeen[suburb] = state.suburbsSeen[suburb] || [];
-    if (!state.suburbsSeen[suburb].includes(species.id)) {
-      state.suburbsSeen[suburb].push(species.id);
+  if (loc) {
+    const sectorKey = coordSector(loc.lat, loc.lng);
+    state.suburbsSeen[sectorKey] = state.suburbsSeen[sectorKey] || [];
+    if (!state.suburbsSeen[sectorKey].includes(species.id)) {
+      state.suburbsSeen[sectorKey].push(species.id);
       isLocalLegend = true;
     }
   }
