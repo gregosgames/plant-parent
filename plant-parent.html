@@ -1821,6 +1821,36 @@ function mapClaudeToSpecies(c) {
 let sb = null;        // supabase client
 let sbUser = null;    // current user object
 let syncing = false;
+const PHOTO_BUCKET = 'discovery-photos';
+
+/* ---- Photo storage ----
+   Synced photos live in a Storage bucket; the discoveries.photo column only
+   stores the object path ({user_id}/{discovery_id}.jpg). The bucket is public
+   for reads: pulls stay a single query with no per-row signed-URL round-trips,
+   at the cost of photos being readable by anyone holding the URL — fine for
+   field snapshots, and consistent with the no-redirect-URL auth approach.
+   Legacy rows that still carry base64 data URLs keep rendering unchanged, and
+   local-only (not signed in) discoveries keep base64 in localStorage as before. */
+function photoStoragePath(discoveryId) {
+  return `${sbUser.id}/${discoveryId}.jpg`;
+}
+
+function resolvePhotoUrl(photo) {
+  // Storage path → public URL; base64 data URLs and full URLs pass through
+  if (!photo || photo.startsWith('data:') || photo.startsWith('http')) return photo;
+  return sb.storage.from(PHOTO_BUCKET).getPublicUrl(photo).data.publicUrl;
+}
+
+async function uploadPhotoToStorage(discovery) {
+  const path = photoStoragePath(discovery.id);
+  const blob = await (await fetch(discovery.photo)).blob();
+  const { error } = await sb.storage.from(PHOTO_BUCKET).upload(path, blob, {
+    upsert: true,
+    contentType: blob.type || 'image/jpeg',
+  });
+  if (error) throw error;
+  return path;
+}
 
 function initSupabase() {
   if (!window.supabase) return;
@@ -1882,6 +1912,13 @@ async function signOutSupabase() {
 async function syncPush(discovery) {
   if (!sb || !sbUser) return false;
   try {
+    // Upload the photo blob to Storage first; the row only carries the path.
+    // If the upload throws, the whole push fails and is retried on the next
+    // backgroundSync — we never fall back to stuffing base64 into the row.
+    let photoValue = discovery.photo;
+    if (photoValue && photoValue.startsWith('data:')) {
+      photoValue = await uploadPhotoToStorage(discovery);
+    }
     const row = {
       id: discovery.id,
       user_id: sbUser.id,
@@ -1891,7 +1928,7 @@ async function syncPush(discovery) {
       kingdom: discovery.kingdom,
       rarity: discovery.rarity,
       emoji: discovery.emoji || null,
-      photo: discovery.photo,
+      photo: photoValue,
       lat: discovery.lat,
       lng: discovery.lng,
       suburb: discovery.suburb,
@@ -1913,6 +1950,11 @@ async function syncDelete(id) {
   try {
     const { error } = await sb.from('discoveries').delete().eq('id', id);
     if (error) throw error;
+    // Remove the Storage object too so files don't orphan. Paths are
+    // deterministic ({user_id}/{id}.jpg) so we don't need the row back;
+    // legacy base64-only rows simply have no object to remove.
+    const { error: rmError } = await sb.storage.from(PHOTO_BUCKET).remove([photoStoragePath(id)]);
+    if (rmError) console.warn('Photo cleanup failed (row already deleted):', rmError.message);
     return true;
   } catch (e) {
     console.error('Sync delete failed:', e);
@@ -1932,7 +1974,7 @@ async function syncPull() {
     kingdom: r.kingdom,
     rarity: r.rarity,
     emoji: r.emoji,
-    photo: r.photo,
+    photo: resolvePhotoUrl(r.photo),
     lat: r.lat,
     lng: r.lng,
     suburb: r.suburb,
@@ -1982,7 +2024,7 @@ create table if not exists discoveries (
   kingdom text not null,
   rarity text not null,
   emoji text,
-  photo text,
+  photo text, -- Storage path ({user_id}/{discovery_id}.jpg); legacy rows may hold a base64 data URL
   lat float8,
   lng float8,
   suburb text,
@@ -1999,7 +2041,26 @@ drop policy if exists "delete own" on discoveries;
 
 create policy "read own"   on discoveries for select using (auth.uid() = user_id);
 create policy "insert own" on discoveries for insert with check (auth.uid() = user_id);
-create policy "delete own" on discoveries for delete using (auth.uid() = user_id);`;
+create policy "delete own" on discoveries for delete using (auth.uid() = user_id);
+
+-- Photo storage bucket. Photos are uploaded as {user_id}/{discovery_id}.jpg
+-- and the discoveries.photo column stores that path (not the image itself).
+-- The bucket is PUBLIC for reads (simple, no signed-URL churn); writes and
+-- deletes are locked to each user's own {user_id}/ folder.
+insert into storage.buckets (id, name, public)
+values ('discovery-photos', 'discovery-photos', true)
+on conflict (id) do nothing;
+
+drop policy if exists "photos insert own" on storage.objects;
+drop policy if exists "photos update own" on storage.objects;
+drop policy if exists "photos delete own" on storage.objects;
+
+create policy "photos insert own" on storage.objects for insert
+  with check (bucket_id = 'discovery-photos' and auth.uid()::text = (storage.foldername(name))[1]);
+create policy "photos update own" on storage.objects for update
+  using (bucket_id = 'discovery-photos' and auth.uid()::text = (storage.foldername(name))[1]);
+create policy "photos delete own" on storage.objects for delete
+  using (bucket_id = 'discovery-photos' and auth.uid()::text = (storage.foldername(name))[1]);`;
 
 /* ============= SETTINGS MODAL ============= */
 function openSettings() {
