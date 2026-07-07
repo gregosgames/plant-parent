@@ -1191,7 +1191,7 @@ const BADGES = [
 /* ============= STATE ============= */
 const FREE_LIMITS = { ids: 10, slots: 10 };
 const CLAUDE_MODEL = 'claude-sonnet-5';
-let state = loadState();
+let state = defaultState(); // hydrated from IndexedDB in init()
 let settings = loadSettings();
 
 function loadSettings() {
@@ -1205,11 +1205,7 @@ function saveSettings() {
   localStorage.setItem('plantparent.settings', JSON.stringify(settings));
 }
 
-function loadState() {
-  const saved = localStorage.getItem('plantparent.state');
-  if (saved) {
-    try { return JSON.parse(saved); } catch(e) {}
-  }
+function defaultState() {
   return {
     discoveries: [],   // {id, speciesId, name, sci, kingdom, rarity, photo, lat, lng, suburb, ts}
     idsUsed: 0,
@@ -1219,8 +1215,84 @@ function loadState() {
   };
 }
 
+/* ---- IndexedDB-backed state ----
+   State carries base64 photos, and localStorage's ~5MB quota dies after a
+   couple dozen finds — so state lives in IndexedDB. Small keys (settings,
+   geocache, onboarding flag, Supabase auth) stay in localStorage. If IDB is
+   unavailable, everything falls back to localStorage as before. */
+const IDB_NAME = 'plantparent';
+const IDB_STORE = 'kv';
+let idbSupported = typeof indexedDB !== 'undefined';
+
+function idbOpen() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function idbGet(key) {
+  const db = await idbOpen();
+  try {
+    return await new Promise((resolve, reject) => {
+      const req = db.transaction(IDB_STORE, 'readonly').objectStore(IDB_STORE).get(key);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  } finally { db.close(); }
+}
+
+async function idbSet(key, value) {
+  const db = await idbOpen();
+  try {
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).put(value, key);
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+  } finally { db.close(); }
+}
+
+async function loadState() {
+  if (idbSupported) {
+    try {
+      const stored = await idbGet('state');
+      if (stored) return stored;
+    } catch (e) {
+      console.warn('[PP] IndexedDB unavailable, using localStorage:', e.message);
+      idbSupported = false;
+    }
+  }
+  // One-time migration path: pre-IDB users have state in localStorage
+  const saved = localStorage.getItem('plantparent.state');
+  if (saved) {
+    try {
+      const migrated = JSON.parse(saved);
+      if (idbSupported) {
+        await idbSet('state', migrated);
+        localStorage.removeItem('plantparent.state'); // free the quota
+        console.log('[PP] Migrated state from localStorage to IndexedDB');
+      }
+      return migrated;
+    } catch (e) {}
+  }
+  return defaultState();
+}
+
 function saveState() {
-  localStorage.setItem('plantparent.state', JSON.stringify(state));
+  if (idbSupported) {
+    idbSet('state', state).catch(e => {
+      console.warn('[PP] IndexedDB save failed, falling back to localStorage:', e.message);
+      idbSupported = false;
+      saveState();
+    });
+  } else {
+    try { localStorage.setItem('plantparent.state', JSON.stringify(state)); }
+    catch (e) { console.error('[PP] State save failed (quota?):', e.message); showToast('⚠️ Could not save — storage full'); }
+  }
 }
 
 /* ============= HELPERS ============= */
@@ -2870,7 +2942,8 @@ function initPWA() {
 }
 
 /* ============= INIT ============= */
-function init() {
+async function init() {
+  state = await loadState();
   updateHeader();
   updateAIPill();
   initSupabase();
@@ -2881,9 +2954,17 @@ function init() {
 init();
 
 // Dev helper: window.PP exposes state for inspection
-window.PP = { state, saveState, SPECIES, BADGES, RARITY, reset: () => {
-  if (confirm('Reset all data?')) { localStorage.clear(); location.reload(); }
-} };
+window.PP = {
+  get state() { return state; }, // getter — state is reassigned after async hydration
+  saveState, SPECIES, BADGES, RARITY,
+  reset: () => {
+    if (confirm('Reset all data?')) {
+      localStorage.clear();
+      if (typeof indexedDB !== 'undefined') indexedDB.deleteDatabase(IDB_NAME);
+      location.reload();
+    }
+  },
+};
 </script>
 </body>
 </html>
