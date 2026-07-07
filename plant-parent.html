@@ -1280,11 +1280,51 @@ function getLocation() {
   });
 }
 
-async function reverseGeocode(lat, lng) {
-  // Pseudo-suburb derived from rounded coords (deterministic, no API call needed for MVP)
-  // Real-world: use Nominatim or similar
+/* ---- Reverse geocoding (Nominatim) ----
+   Design note: the Local Legend "first in your suburb" mechanic keeps using
+   the deterministic coordinate-sector key (coordSector) rather than the real
+   suburb name — it works offline, never shifts when Nominatim's answer
+   changes, and keeps every existing user's suburbsSeen data valid. The real
+   suburb name is what gets stored on the discovery and displayed. */
+function coordSector(lat, lng) {
   const r = (n) => Math.round(n * 100) / 100;
   return `Sector ${r(lat)},${r(lng)}`;
+}
+
+// Cache geocode results by ~100m-rounded coordinate so repeat finds in the
+// same spot don't re-hit the API (Nominatim's usage policy asks for restraint)
+let geocodeCache = {};
+try { geocodeCache = JSON.parse(localStorage.getItem('plantparent.geocache') || '{}'); } catch {}
+
+async function reverseGeocode(lat, lng) {
+  const cacheKey = `${Math.round(lat * 1000) / 1000},${Math.round(lng * 1000) / 1000}`;
+  if (geocodeCache[cacheKey]) return geocodeCache[cacheKey];
+  try {
+    // zoom=14 asks for suburb-level detail. Browsers attach this page's
+    // Origin/Referer automatically, which serves as the app identification
+    // Nominatim's policy requires (a custom User-Agent isn't settable in JS).
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 5000); // never stall the ID flow
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=14`,
+      { headers: { 'Accept': 'application/json' }, signal: ctrl.signal }
+    );
+    clearTimeout(timer);
+    if (!res.ok) throw new Error(`Nominatim ${res.status}`);
+    const data = await res.json();
+    const a = data.address || {};
+    // Suburb-ish keys in rough order of usefulness for Australian addresses
+    const name = a.suburb || a.locality || a.village || a.town || a.city_district
+      || a.hamlet || a.municipality || a.city || null;
+    if (!name) throw new Error('no suburb-level field in response');
+    geocodeCache[cacheKey] = name;
+    try { localStorage.setItem('plantparent.geocache', JSON.stringify(geocodeCache)); } catch {}
+    return name;
+  } catch (e) {
+    // Degrade quietly to the coordinate sector — never block identification
+    console.warn('[PP] Reverse geocode fell back to sector:', e.message);
+    return coordSector(lat, lng);
+  }
 }
 
 /* ============= MODAL ============= */
@@ -2332,12 +2372,16 @@ function showResult(species, photo, loc, suburb) {
   // Count this ID
   state.idsUsed++;
 
-  // Local legend? — first in this suburb to find this species
+  // Local legend? — first in this area to find this species. Keyed off the
+  // deterministic coordinate sector, not the display suburb (see the
+  // reverse-geocoding note) — this also keeps pre-Nominatim suburbsSeen
+  // entries valid with no migration.
   let isLocalLegend = false;
-  if (suburb) {
-    state.suburbsSeen[suburb] = state.suburbsSeen[suburb] || [];
-    if (!state.suburbsSeen[suburb].includes(species.id)) {
-      state.suburbsSeen[suburb].push(species.id);
+  if (loc) {
+    const sectorKey = coordSector(loc.lat, loc.lng);
+    state.suburbsSeen[sectorKey] = state.suburbsSeen[sectorKey] || [];
+    if (!state.suburbsSeen[sectorKey].includes(species.id)) {
+      state.suburbsSeen[sectorKey].push(species.id);
       isLocalLegend = true;
     }
   }
