@@ -795,6 +795,44 @@
     50% { top: calc(100% - 3px); }
   }
 
+  /* Live camera capture */
+  .camera-stage {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 3 / 4;
+    background: var(--ink);
+    border-radius: 16px;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+  .camera-stage video {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .camera-stage .camera-hint {
+    position: absolute;
+    top: 12px; left: 12px; right: 12px;
+    text-align: center;
+    color: white;
+    font-size: 12px;
+    font-weight: 600;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+    pointer-events: none;
+  }
+  .shutter-row { display: flex; justify-content: center; margin-bottom: 4px; }
+  .shutter-btn {
+    width: 72px; height: 72px;
+    border-radius: 50%;
+    border: 4px solid var(--plant-mist);
+    background: var(--plant-mid);
+    cursor: pointer;
+    transition: transform 0.1s, opacity 0.2s;
+    box-shadow: 0 4px 16px rgba(45,74,43,0.35);
+  }
+  .shutter-btn:active { transform: scale(0.92); }
+  .shutter-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
   .result-card {
     background: var(--bg-cream);
     border-radius: 16px;
@@ -1259,6 +1297,7 @@ function openModal(html) {
 }
 function closeModal() {
   console.log('[PP] closeModal');
+  stopCameraStream(); // never leave the camera running behind a closed modal
   $('#modal').classList.remove('show');
   document.body.style.overflow = '';
 }
@@ -1294,10 +1333,17 @@ $('#snapBtn').addEventListener('click', () => {
   // Make sure no lingering modal state is blocking interaction
   document.body.style.overflow = '';
   $('#modal').classList.remove('show');
+  openCameraCapture();
+});
+
+// Legacy capture path — only used when a live getUserMedia stream isn't possible
+function fallbackToFileCapture(reason) {
+  if (reason) showToast(reason, 3200);
+  console.warn('[PP] Camera fallback:', reason || 'user requested');
   const input = $('#cameraInput');
   input.value = ''; // Force-reset BEFORE picker opens
   input.click();
-});
+}
 
 $('#cameraInput').addEventListener('change', e => {
   console.log('[PP] Change event, files:', e.target.files?.length);
@@ -1322,6 +1368,100 @@ function handlePhoto(file) {
     showToast('Could not read the photo file');
   };
   reader.readAsDataURL(file);
+}
+
+/* ============= LIVE CAMERA CAPTURE ============= */
+// capture="environment" on the file input is only a hint — desktop browsers
+// still show a file picker. Where the browser supports it we open a real
+// getUserMedia() stream instead, so photos can only come from a live feed.
+// The file input stays as the documented fallback (no camera, denied, http).
+let cameraStream = null;
+
+function stopCameraStream() {
+  if (!cameraStream) return;
+  cameraStream.getTracks().forEach(t => t.stop());
+  cameraStream = null;
+}
+
+async function openCameraCapture() {
+  // Freemium gate — mirrors the check handlePhoto applies on the fallback path
+  if (!state.isPro && state.idsUsed >= FREE_LIMITS.ids) {
+    return showUpgradeModal();
+  }
+  if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+    return fallbackToFileCapture("Camera access unavailable — using your device's photo capture instead");
+  }
+
+  openModal(`
+    <h2>Snap your find</h2>
+    <p class="lead">Line it up — foliage, flowers or fruiting bodies work best.</p>
+    <div class="camera-stage">
+      <video id="cameraFeed" autoplay playsinline muted></video>
+      <div class="camera-hint" id="cameraHint">Starting camera…</div>
+    </div>
+    <div class="shutter-row">
+      <button class="shutter-btn" id="shutterBtn" aria-label="Take photo" disabled></button>
+    </div>
+    <button class="btn secondary" onclick="closeModal()" style="margin-top:12px">Cancel</button>
+  `);
+
+  try {
+    // ideal (not exact) facingMode: rear camera when available, but devices
+    // with a single front camera still get a stream instead of an error
+    cameraStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1440 } },
+      audio: false,
+    });
+  } catch (err) {
+    console.warn('[PP] getUserMedia failed:', err.name, err.message);
+    if (err.name === 'NotAllowedError' || err.name === 'SecurityError') {
+      return showCameraDeniedModal();
+    }
+    // No camera hardware, camera busy, etc. — fall back rather than dead-end
+    closeModal();
+    return fallbackToFileCapture("Camera access unavailable — using your device's photo capture instead");
+  }
+
+  const video = $('#cameraFeed');
+  if (!video) { stopCameraStream(); return; } // modal was dismissed while the permission prompt was up
+  video.srcObject = cameraStream;
+  video.addEventListener('loadedmetadata', () => {
+    const hint = $('#cameraHint'); if (hint) hint.textContent = '';
+    const btn = $('#shutterBtn'); if (btn) btn.disabled = false;
+  }, { once: true });
+
+  let captured = false;
+  $('#shutterBtn').addEventListener('click', () => {
+    if (captured || !cameraStream) return; // guard against rapid double-taps
+    captured = true;
+    const canvas = document.createElement('canvas');
+    // Cap the long edge so the base64 payload stays localStorage-friendly
+    const scale = Math.min(1, 1600 / Math.max(video.videoWidth, video.videoHeight));
+    canvas.width = Math.round(video.videoWidth * scale);
+    canvas.height = Math.round(video.videoHeight * scale);
+    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    stopCameraStream();
+    closeModal();
+    startIdentification(dataUrl); // same data-URL shape the FileReader path produces
+  }, { once: true });
+}
+
+function showCameraDeniedModal() {
+  stopCameraStream();
+  openModal(`
+    <h2>Camera access needed</h2>
+    <p class="lead">Plant Parent identifies live finds only, so it needs your camera.</p>
+    <div class="nonnative-flag">
+      <b>Camera permission was denied.</b><br/>
+      Allow camera access for this site in your browser settings, then try again.
+      If this device has no camera, you can use your device's own photo capture instead.
+    </div>
+    <button class="btn" id="btnRetryCamera">Try again</button>
+    <button class="btn secondary" id="btnCameraFallback" style="margin-top:8px">Use device capture instead</button>
+  `);
+  $('#btnRetryCamera').addEventListener('click', () => { closeModal(); openCameraCapture(); });
+  $('#btnCameraFallback').addEventListener('click', () => { closeModal(); fallbackToFileCapture(); });
 }
 
 async function startIdentification(photoDataUrl) {
