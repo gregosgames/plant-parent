@@ -4,6 +4,12 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <meta name="theme-color" content="#2d4a2b" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="apple-touch-icon" href="icons/icon-180.png" />
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Plant Parent" />
 <title>Plant Parent — A treasure hunt for Australian native flora & fungi</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
@@ -1036,7 +1042,7 @@
       <div class="fm-title">Free tier</div>
       <div class="freemium-progress"><div class="freemium-progress-fill" id="freemiumFill" style="width:0%"></div></div>
       <div class="fm-meta">
-        <span><span id="fmIdsUsed">0</span>/10 IDs used</span>
+        <span><span id="fmIdsUsed">0</span>/10 IDs this month</span>
         <span><span id="fmSlotsUsed">0</span>/10 slots used</span>
       </div>
     </div>
@@ -1185,7 +1191,7 @@ const BADGES = [
 /* ============= STATE ============= */
 const FREE_LIMITS = { ids: 10, slots: 10 };
 const CLAUDE_MODEL = 'claude-sonnet-5';
-let state = loadState();
+let state = defaultState(); // hydrated from IndexedDB in init()
 let settings = loadSettings();
 
 function loadSettings() {
@@ -1199,11 +1205,7 @@ function saveSettings() {
   localStorage.setItem('plantparent.settings', JSON.stringify(settings));
 }
 
-function loadState() {
-  const saved = localStorage.getItem('plantparent.state');
-  if (saved) {
-    try { return JSON.parse(saved); } catch(e) {}
-  }
+function defaultState() {
   return {
     discoveries: [],   // {id, speciesId, name, sci, kingdom, rarity, photo, lat, lng, suburb, ts}
     idsUsed: 0,
@@ -1213,8 +1215,84 @@ function loadState() {
   };
 }
 
+/* ---- IndexedDB-backed state ----
+   State carries base64 photos, and localStorage's ~5MB quota dies after a
+   couple dozen finds — so state lives in IndexedDB. Small keys (settings,
+   geocache, onboarding flag, Supabase auth) stay in localStorage. If IDB is
+   unavailable, everything falls back to localStorage as before. */
+const IDB_NAME = 'plantparent';
+const IDB_STORE = 'kv';
+let idbSupported = typeof indexedDB !== 'undefined';
+
+function idbOpen() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function idbGet(key) {
+  const db = await idbOpen();
+  try {
+    return await new Promise((resolve, reject) => {
+      const req = db.transaction(IDB_STORE, 'readonly').objectStore(IDB_STORE).get(key);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  } finally { db.close(); }
+}
+
+async function idbSet(key, value) {
+  const db = await idbOpen();
+  try {
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).put(value, key);
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+  } finally { db.close(); }
+}
+
+async function loadState() {
+  if (idbSupported) {
+    try {
+      const stored = await idbGet('state');
+      if (stored) return stored;
+    } catch (e) {
+      console.warn('[PP] IndexedDB unavailable, using localStorage:', e.message);
+      idbSupported = false;
+    }
+  }
+  // One-time migration path: pre-IDB users have state in localStorage
+  const saved = localStorage.getItem('plantparent.state');
+  if (saved) {
+    try {
+      const migrated = JSON.parse(saved);
+      if (idbSupported) {
+        await idbSet('state', migrated);
+        localStorage.removeItem('plantparent.state'); // free the quota
+        console.log('[PP] Migrated state from localStorage to IndexedDB');
+      }
+      return migrated;
+    } catch (e) {}
+  }
+  return defaultState();
+}
+
 function saveState() {
-  localStorage.setItem('plantparent.state', JSON.stringify(state));
+  if (idbSupported) {
+    idbSet('state', state).catch(e => {
+      console.warn('[PP] IndexedDB save failed, falling back to localStorage:', e.message);
+      idbSupported = false;
+      saveState();
+    });
+  } else {
+    try { localStorage.setItem('plantparent.state', JSON.stringify(state)); }
+    catch (e) { console.error('[PP] State save failed (quota?):', e.message); showToast('⚠️ Could not save — storage full'); }
+  }
 }
 
 /* ============= HELPERS ============= */
@@ -1260,6 +1338,25 @@ function pickSpecies() {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
+/* ---- Monthly free tier ----
+   The 10 free IDs reset each calendar month (a lifetime cap kills retention
+   before it starts). Called on init and before every gate check, so a month
+   rollover mid-session is picked up too. */
+function currentMonthKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function checkMonthlyReset() {
+  const key = currentMonthKey();
+  if (state.idsMonth !== key) {
+    state.idsMonth = key;
+    state.idsUsed = 0; // fresh IDs for the new month (existing users get this on first rollover)
+    saveState();
+    updateHeader();
+  }
+}
+
 function showToast(msg, ms=2200) {
   const t = $('#toast');
   t.textContent = msg;
@@ -1289,6 +1386,21 @@ function getLocation() {
 function coordSector(lat, lng) {
   const r = (n) => Math.round(n * 100) / 100;
   return `Sector ${r(lat)},${r(lng)}`;
+}
+
+/* ---- Location fuzzing (conservation guardrail) ----
+   Precise coordinates of rare and legendary species are never stored or
+   synced — they're generalised to a ~1.1km grid before the discovery is
+   saved, the same practice ALA and iNaturalist use for sensitive species.
+   Deterministic rounding (not random jitter) so repeat finds can't be
+   averaged back to the true location. */
+function isSensitiveRarity(rarity) {
+  return rarity === 'rare' || rarity === 'legendary';
+}
+
+function fuzzLocation(loc) {
+  const r = (n) => Math.round(n * 100) / 100;
+  return { lat: r(loc.lat), lng: r(loc.lng) };
 }
 
 // Cache geocode results by ~100m-rounded coordinate so repeat finds in the
@@ -1398,6 +1510,7 @@ function handlePhoto(file) {
   // Make sure any leftover modal lock is cleared before we open the next one
   document.body.style.overflow = '';
   // Freemium gate
+  checkMonthlyReset();
   if (!state.isPro && state.idsUsed >= FREE_LIMITS.ids) {
     return showUpgradeModal();
   }
@@ -1425,6 +1538,7 @@ function stopCameraStream() {
 
 async function openCameraCapture() {
   // Freemium gate — mirrors the check handlePhoto applies on the fallback path
+  checkMonthlyReset();
   if (!state.isPro && state.idsUsed >= FREE_LIMITS.ids) {
     return showUpgradeModal();
   }
@@ -2210,11 +2324,26 @@ function openSettings() {
         🔐 All keys and tokens are stored only in this browser's localStorage. Calls go direct from your device.
       </p>
 
+      <button class="btn secondary" id="installBtn" style="display:none;">📲 Install Plant Parent on this device</button>
+
       <button class="btn" id="saveSettings">Save & close</button>
       <button class="btn secondary" onclick="closeModal()">Cancel</button>
       ${hasKey ? '<button class="btn" id="clearKey" style="background:#a55045;">Remove Claude key</button>' : ''}
     </div>
   `);
+
+  // ===== Install prompt (only when the browser offered one) =====
+  const installBtn = $('#installBtn');
+  if (deferredInstallPrompt && installBtn) {
+    installBtn.style.display = '';
+    installBtn.addEventListener('click', async () => {
+      installBtn.disabled = true;
+      deferredInstallPrompt.prompt();
+      await deferredInstallPrompt.userChoice;
+      deferredInstallPrompt = null;
+      installBtn.style.display = 'none';
+    });
+  }
 
   // ===== Toggles =====
   const aiToggle = $('#aiToggle');
@@ -2447,8 +2576,10 @@ function showResult(species, photo, loc, suburb) {
         <div class="meta-val">${rarityLabel}</div>
       </div>
       <div class="meta-item">
-        <div class="meta-lbl">Location</div>
-        <div class="meta-val">${loc ? `${loc.lat.toFixed(3)}, ${loc.lng.toFixed(3)}` : 'Unknown'}</div>
+        <div class="meta-lbl">Location${isSensitiveRarity(species.rarity) && loc ? ' · generalised' : ''}</div>
+        <div class="meta-val">${!loc ? 'Unknown' : isSensitiveRarity(species.rarity)
+          ? `${fuzzLocation(loc).lat.toFixed(2)}, ${fuzzLocation(loc).lng.toFixed(2)}`
+          : `${loc.lat.toFixed(3)}, ${loc.lng.toFixed(3)}`}</div>
       </div>
       <div class="meta-item">
         <div class="meta-lbl">Date</div>
@@ -2483,6 +2614,9 @@ function showResult(species, photo, loc, suburb) {
 }
 
 function addDiscovery(species, photo, loc, suburb, isLocalLegend) {
+  // Sensitive species only ever get generalised coordinates on the record
+  const sensitive = isSensitiveRarity(species.rarity);
+  const storedLoc = loc && sensitive ? fuzzLocation(loc) : loc;
   const discovery = {
     id: uid(),
     speciesId: species.id,
@@ -2492,9 +2626,10 @@ function addDiscovery(species, photo, loc, suburb, isLocalLegend) {
     rarity: species.rarity,
     emoji: species.emoji,
     photo,
-    lat: loc?.lat,
-    lng: loc?.lng,
+    lat: storedLoc?.lat,
+    lng: storedLoc?.lng,
     suburb,
+    locationFuzzed: !!(loc && sensitive),
     isLocalLegend,
     ts: Date.now(),
   };
@@ -2544,7 +2679,7 @@ function updateHeader() {
 function showUpgradeModal() {
   openModal(`
     <h2>${state.isPro ? '🌟 You\'re Pro!' : 'Unlock Plant Parent Pro'}</h2>
-    <p class="lead">${state.isPro ? 'Enjoy unlimited everything.' : 'Free tier hit — time to upgrade.'}</p>
+    <p class="lead">${state.isPro ? 'Enjoy unlimited everything.' : "You've hit this month's free limit — upgrade, or new IDs arrive next month."}</p>
     <div style="background:linear-gradient(135deg, var(--ochre), var(--rust)); color:white; border-radius:14px; padding:20px; margin:14px 0;">
       <div style="font-weight:700; font-size:18px; margin-bottom:6px;">🌟 Plant Parent Pro</div>
       <ul style="margin:8px 0 0; padding-left:20px; font-size:14px; line-height:1.7;">
@@ -2680,7 +2815,7 @@ function showDetail(id) {
       <div class="meta-item"><div class="meta-lbl">Rarity</div><div class="meta-val">${RARITY[d.rarity].label}</div></div>
       <div class="meta-item"><div class="meta-lbl">XP earned</div><div class="meta-val">+${RARITY[d.rarity].xp}</div></div>
       <div class="meta-item"><div class="meta-lbl">Found</div><div class="meta-val">${new Date(d.ts).toLocaleDateString()}</div></div>
-      <div class="meta-item" style="grid-column:1/-1"><div class="meta-lbl">Location</div><div class="meta-val">${d.lat ? `${d.lat.toFixed(4)}, ${d.lng.toFixed(4)}` : 'Unknown'}${d.suburb ? ` · ${d.suburb}` : ''}</div></div>
+      <div class="meta-item" style="grid-column:1/-1"><div class="meta-lbl">Location</div><div class="meta-val">${d.lat ? `${d.lat.toFixed(d.locationFuzzed ? 2 : 4)}, ${d.lng.toFixed(d.locationFuzzed ? 2 : 4)}` : 'Unknown'}${d.suburb ? ` · ${d.suburb}` : ''}${d.locationFuzzed ? '<div style="font-size:11px; color:var(--muted); margin-top:4px;">📍 Generalised to ~1km to protect this species</div>' : ''}</div></div>
     </div>
     ${d.isLocalLegend ? '<div class="xp-burst" style="margin-top:14px;">🏆 Local Legend find</div>' : ''}
     <button class="btn secondary" onclick="closeModal()" style="margin-top:14px">Close</button>
@@ -2734,7 +2869,7 @@ function renderProfile() {
       <div class="fm-title">Free tier</div>
       <div class="freemium-progress"><div class="freemium-progress-fill" id="freemiumFill" style="width:0%"></div></div>
       <div class="fm-meta">
-        <span><span id="fmIdsUsed">0</span>/10 IDs used</span>
+        <span><span id="fmIdsUsed">0</span>/10 IDs this month</span>
         <span><span id="fmSlotsUsed">0</span>/10 slots used</span>
       </div>
       <button class="btn" id="upgradeBtn" style="margin-top:12px;">Unlock Pro</button>
@@ -2814,7 +2949,7 @@ function maybeShowOnboarding() {
       <li>Earn XP, unlock badges, become a Local Legend</li>
     </ol>
     <p style="font-size:12px; color:var(--ink-soft); background:var(--sandstone); padding:10px; border-radius:8px; margin:12px 0">
-      <b>Free tier:</b> 10 lifetime IDs and 10 collection slots. Upgrade for unlimited.
+      <b>Free tier:</b> 10 free IDs every month and 10 collection slots. Upgrade for unlimited.
     </p>
     <p style="font-size:12px; color:var(--rust); padding:10px; border:1px solid var(--rust); border-radius:8px;">
       ⚠️ <b>Safety:</b> Never eat wild fungi based on app identification alone. This app is for observation only.
@@ -2827,20 +2962,52 @@ function maybeShowOnboarding() {
   });
 }
 
+/* ============= PWA ============= */
+let deferredInstallPrompt = null;
+
+function initPWA() {
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').then(
+      () => console.log('[PP] Service worker registered'),
+      err => console.warn('[PP] Service worker registration failed:', err.message)
+    );
+  }
+  // Stash the install prompt so settings can offer an "Install app" button
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+  });
+  window.addEventListener('appinstalled', () => {
+    deferredInstallPrompt = null;
+    showToast('🌿 Plant Parent installed');
+  });
+}
+
 /* ============= INIT ============= */
-function init() {
+async function init() {
+  state = await loadState();
+  checkMonthlyReset();
   updateHeader();
   updateAIPill();
   initSupabase();
+  initPWA();
   renderRecent();
   maybeShowOnboarding();
 }
 init();
 
 // Dev helper: window.PP exposes state for inspection
-window.PP = { state, saveState, SPECIES, BADGES, RARITY, reset: () => {
-  if (confirm('Reset all data?')) { localStorage.clear(); location.reload(); }
-} };
+window.PP = {
+  get state() { return state; }, // getter — state is reassigned after async hydration
+  saveState, SPECIES, BADGES, RARITY,
+  reset: () => {
+    if (confirm('Reset all data?')) {
+      localStorage.clear();
+      if (typeof indexedDB !== 'undefined') indexedDB.deleteDatabase(IDB_NAME);
+      location.reload();
+    }
+  },
+};
 </script>
 </body>
 </html>
