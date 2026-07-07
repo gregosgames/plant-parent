@@ -4,6 +4,12 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <meta name="theme-color" content="#2d4a2b" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="apple-touch-icon" href="icons/icon-180.png" />
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Plant Parent" />
 <title>Plant Parent — A treasure hunt for Australian native flora & fungi</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
@@ -2210,11 +2216,26 @@ function openSettings() {
         🔐 All keys and tokens are stored only in this browser's localStorage. Calls go direct from your device.
       </p>
 
+      <button class="btn secondary" id="installBtn" style="display:none;">📲 Install Plant Parent on this device</button>
+
       <button class="btn" id="saveSettings">Save & close</button>
       <button class="btn secondary" onclick="closeModal()">Cancel</button>
       ${hasKey ? '<button class="btn" id="clearKey" style="background:#a55045;">Remove Claude key</button>' : ''}
     </div>
   `);
+
+  // ===== Install prompt (only when the browser offered one) =====
+  const installBtn = $('#installBtn');
+  if (deferredInstallPrompt && installBtn) {
+    installBtn.style.display = '';
+    installBtn.addEventListener('click', async () => {
+      installBtn.disabled = true;
+      deferredInstallPrompt.prompt();
+      await deferredInstallPrompt.userChoice;
+      deferredInstallPrompt = null;
+      installBtn.style.display = 'none';
+    });
+  }
 
   // ===== Toggles =====
   const aiToggle = $('#aiToggle');
@@ -2827,11 +2848,33 @@ function maybeShowOnboarding() {
   });
 }
 
+/* ============= PWA ============= */
+let deferredInstallPrompt = null;
+
+function initPWA() {
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').then(
+      () => console.log('[PP] Service worker registered'),
+      err => console.warn('[PP] Service worker registration failed:', err.message)
+    );
+  }
+  // Stash the install prompt so settings can offer an "Install app" button
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+  });
+  window.addEventListener('appinstalled', () => {
+    deferredInstallPrompt = null;
+    showToast('🌿 Plant Parent installed');
+  });
+}
+
 /* ============= INIT ============= */
 function init() {
   updateHeader();
   updateAIPill();
   initSupabase();
+  initPWA();
   renderRecent();
   maybeShowOnboarding();
 }

@@ -1,0 +1,17 @@
+{
+  "name": "Plant Parent — Australian Native Treasure Hunt",
+  "short_name": "Plant Parent",
+  "description": "A treasure hunt for rare Australian native plants and fungi. Snap, identify, collect.",
+  "start_url": "./plant-parent.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f5f0e6",
+  "theme_color": "#2d4a2b",
+  "categories": ["education", "games", "lifestyle"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
