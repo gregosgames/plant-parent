@@ -589,6 +589,60 @@
     backdrop-filter: blur(4px);
   }
 
+  /* ===================== QUESTS & STREAK ===================== */
+  .quest-card {
+    background: var(--bg-cream);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 14px 16px;
+    margin-bottom: 20px;
+  }
+  .quest-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  .quest-title {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--ink-soft);
+  }
+  .streak-chip {
+    font-size: 12px;
+    font-weight: 700;
+    padding: 4px 12px;
+    border-radius: 999px;
+    background: var(--chip, rgba(201,151,74,0.16));
+    color: var(--ochre-deep);
+  }
+  .streak-chip.cold { background: rgba(0,0,0,0.05); color: var(--muted); }
+  .quest-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 0;
+  }
+  .quest-row + .quest-row { border-top: 1px solid var(--line); }
+  .quest-row .q-ico {
+    width: 34px; height: 34px;
+    border-radius: 10px;
+    background: rgba(74,103,65,0.1);
+    display: grid; place-items: center;
+    font-size: 17px;
+    flex-shrink: 0;
+  }
+  .quest-row .q-desc { flex: 1; font-size: 13.5px; font-weight: 600; line-height: 1.3; }
+  .quest-row .q-xp {
+    font-size: 12px; font-weight: 700; color: var(--ochre-deep);
+    flex-shrink: 0;
+  }
+  .quest-row.done .q-desc { text-decoration: line-through; color: var(--muted); }
+  .quest-row.done .q-ico { background: rgba(74,143,93,0.15); }
+  .quest-row.done .q-xp { color: var(--uncommon); }
+
   /* ===================== DEX VIEW ===================== */
   .dex-summary {
     background: linear-gradient(135deg, var(--plant-deep), var(--plant-mid));
@@ -1023,6 +1077,8 @@
     </div>
     <p class="field-note">Plant Parent is a live treasure hunt. Photos must come from your camera in the field — no gallery uploads. 🌿</p>
 
+    <div class="quest-card" id="questCard"></div>
+
     <div class="section-title">Recent finds</div>
     <div class="recent-grid" id="recentGrid"></div>
   </section>
@@ -1249,6 +1305,7 @@ const BADGES = [
   { id:'local-legend',     name:'Local Legend',     desc:'First in suburb find', icon:'🏆', check: s => s.localLegends >= 1 },
   { id:'rare-finder',      name:'Rare Finder',      desc:'Discover 3 rare species', icon:'💎', check: s => s.rareCount >= 3 },
   { id:'mythic',           name:'Mythic',           desc:'Find a Legendary',     icon:'✨', check: s => s.legendaryCount >= 1 },
+  { id:'bushfire',         name:'Bushfire',         desc:'7-day find streak',    icon:'🔥', check: s => s.streak >= 7 },
 ];
 
 /* ============= STATE ============= */
@@ -1368,9 +1425,10 @@ function getStats() {
   const fungi  = state.discoveries.filter(d => d.kingdom === 'fungi').length;
   const rareCount      = state.discoveries.filter(d => d.rarity === 'rare').length;
   const legendaryCount = state.discoveries.filter(d => d.rarity === 'legendary').length;
-  const xp    = state.discoveries.reduce((sum, d) => sum + (RARITY[d.rarity]?.xp || 0), 0);
+  const xp    = state.discoveries.reduce((sum, d) => sum + (RARITY[d.rarity]?.xp || 0), 0)
+              + (state.bonusXP || 0); // quest rewards
   const localLegends = state.discoveries.filter(d => d.isLocalLegend).length;
-  return { plants, fungi, rareCount, legendaryCount, xp, total: state.discoveries.length, localLegends };
+  return { plants, fungi, rareCount, legendaryCount, xp, total: state.discoveries.length, localLegends, streak: currentStreak() };
 }
 
 function getLevel(xp) {
@@ -1399,6 +1457,108 @@ function pickSpecies() {
   const rarity = pickWeightedRarity();
   const pool = SPECIES.filter(s => s.rarity === rarity);
   return pool[Math.floor(Math.random() * pool.length)];
+}
+
+/* ============= DAILY QUESTS & STREAK ============= */
+// Two quests rotate daily, picked deterministically from the pool by the
+// date — no server needed, and everyone in the world gets the same pair.
+// Completing a quest banks bonus XP in state.bonusXP (discovery XP itself
+// is always derived from the discoveries array).
+const QUESTS = [
+  { id: 'find-plant',   icon: '🌿', desc: 'Log a plant today',                        xp: 15, check: (d) => d.kingdom === 'plant' },
+  { id: 'find-fungus',  icon: '🍄', desc: 'Log a fungus today',                       xp: 20, check: (d) => d.kingdom === 'fungi' },
+  { id: 'find-uncommon',icon: '💎', desc: 'Find something uncommon or better',        xp: 25, check: (d) => d.rarity !== 'common' },
+  { id: 'find-new',     icon: '✨', desc: 'Find a species new to your collection',    xp: 25, check: (d, ctx) => ctx.isNewSpecies },
+  { id: 'find-two',     icon: '👀', desc: 'Log two finds in one day',                 xp: 20, check: (d, ctx) => ctx.todayCount >= 2 },
+  { id: 'find-gum',     icon: '🌳', desc: 'Find a eucalypt or wattle',                xp: 20, check: (d) => /^(Eucalyptus|Corymbia|Angophora|Acacia)\s/.test(d.sci || '') },
+  { id: 'find-protea',  icon: '🌼', desc: 'Find a banksia, grevillea or hakea',       xp: 20, check: (d) => /^(Banksia|Grevillea|Hakea|Telopea)\s/.test(d.sci || '') },
+  { id: 'local-first',  icon: '🏆', desc: 'Be first in an area to find a species',    xp: 30, check: (d) => !!d.isLocalLegend },
+];
+
+function dayKey(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function questsForToday() {
+  // Deterministic daily pair: seed by days-since-epoch, second pick offset
+  // by a co-prime stride so the pairing rotates through the pool
+  const seed = Math.floor(Date.now() / 86400000);
+  const a = seed % QUESTS.length;
+  const b = (a + 1 + (seed * 5 + 3) % (QUESTS.length - 1)) % QUESTS.length;
+  return [QUESTS[a], QUESTS[b]];
+}
+
+function ensureQuestDay() {
+  const today = dayKey();
+  if (!state.quests || state.quests.day !== today) {
+    state.quests = { day: today, completed: {} };
+    saveState();
+  }
+}
+
+function currentStreak() {
+  const s = state.streak;
+  if (!s || !s.count) return 0;
+  const today = dayKey();
+  const yesterday = dayKey(new Date(Date.now() - 86400000));
+  return (s.lastDay === today || s.lastDay === yesterday) ? s.count : 0; // stale streaks read as 0
+}
+
+function bumpStreak() {
+  const today = dayKey();
+  const yesterday = dayKey(new Date(Date.now() - 86400000));
+  const s = state.streak || { count: 0, lastDay: null };
+  if (s.lastDay === today) return;                 // already counted today
+  s.count = (s.lastDay === yesterday) ? s.count + 1 : 1;
+  s.lastDay = today;
+  state.streak = s;
+  if (s.count > 1) showToast(`🔥 ${s.count}-day streak!`, 2600);
+}
+
+function evaluateQuests(discovery) {
+  ensureQuestDay();
+  const today = dayKey();
+  const todayCount = state.discoveries.filter(d => dayKey(new Date(d.ts)) === today).length;
+  const isNewSpecies = state.discoveries.filter(d => d.speciesId === discovery.speciesId).length === 1;
+  const ctx = { todayCount, isNewSpecies };
+  const completedNow = [];
+  for (const q of questsForToday()) {
+    if (state.quests.completed[q.id]) continue;
+    let passed = false;
+    try { passed = q.check(discovery, ctx); } catch (e) {}
+    if (passed) {
+      state.quests.completed[q.id] = true;
+      state.bonusXP = (state.bonusXP || 0) + q.xp;
+      completedNow.push(q);
+    }
+  }
+  if (completedNow.length) {
+    saveState();
+    completedNow.forEach((q, i) => {
+      setTimeout(() => showToast(`🎯 Quest complete: ${q.desc} +${q.xp} XP`, 2800), 400 + i * 900);
+    });
+  }
+}
+
+function renderQuests() {
+  const card = $('#questCard');
+  if (!card) return;
+  ensureQuestDay();
+  const streak = currentStreak();
+  const rows = questsForToday().map(q => {
+    const done = !!state.quests.completed[q.id];
+    return `<div class="quest-row ${done ? 'done' : ''}">
+      <div class="q-ico">${done ? '✅' : q.icon}</div>
+      <div class="q-desc">${q.desc}</div>
+      <div class="q-xp">+${q.xp} XP</div>
+    </div>`;
+  }).join('');
+  card.innerHTML = `
+    <div class="quest-head">
+      <div class="quest-title">Today's quests</div>
+      <div class="streak-chip ${streak ? '' : 'cold'}">${streak ? `🔥 ${streak}-day streak` : 'Start a streak today'}</div>
+    </div>
+    ${rows}`;
 }
 
 /* ---- Monthly free tier ----
@@ -2784,6 +2944,8 @@ function addDiscovery(species, photo, loc, suburb, isLocalLegend) {
     ts: Date.now(),
   };
   state.discoveries.push(discovery);
+  bumpStreak();
+  evaluateQuests(discovery);
   saveState();
   checkBadges();
   updateHeader();
@@ -2860,6 +3022,7 @@ function showUpgradeModal() {
 
 /* ============= DISCOVER — RECENT ============= */
 function renderRecent() {
+  renderQuests();
   const grid = $('#recentGrid');
   const recent = state.discoveries.slice(-6).reverse();
   let html = '';
