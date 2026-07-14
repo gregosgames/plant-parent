@@ -589,6 +589,87 @@
     backdrop-filter: blur(4px);
   }
 
+  /* ===================== GARDEN VIEW ===================== */
+  .garden-summary {
+    background: linear-gradient(135deg, var(--plant-deep), var(--plant-mid));
+    color: var(--bg-cream);
+    border-radius: 16px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .garden-nectar { font-size: 24px; font-weight: 800; line-height: 1.3; }
+  .water-btn {
+    background: var(--ochre);
+    color: var(--plant-deep);
+    border: none;
+    border-radius: 14px;
+    padding: 12px 18px;
+    font-size: 14px;
+    font-weight: 700;
+    font-family: inherit;
+    line-height: 1.25;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    transition: transform 0.1s, opacity 0.2s;
+  }
+  .water-btn:active { transform: scale(0.96); }
+  .water-btn:disabled { opacity: 0.55; cursor: default; }
+  .garden-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+  .plot {
+    aspect-ratio: 0.9;
+    background: var(--bg-cream);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    cursor: pointer;
+    padding: 6px;
+    text-align: center;
+    transition: transform 0.12s;
+  }
+  .plot:active { transform: scale(0.95); }
+  .plot .p-emoji { line-height: 1.1; }
+  .plot .p-name {
+    font-size: 10px; font-weight: 600; color: var(--ink);
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .plot .p-stage { font-size: 9px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); font-weight: 700; }
+  .plot.flowering {
+    border-color: var(--ochre);
+    box-shadow: 0 0 10px rgba(201,151,74,0.35);
+  }
+  .plot.empty {
+    border: 2px dashed var(--sandstone);
+    background: transparent;
+    color: var(--muted);
+  }
+  .plot.empty .p-emoji { opacity: 0.7; }
+  .plot.buy { border: 2px dashed var(--ochre); color: var(--ochre-deep); background: rgba(201,151,74,0.06); }
+  .seed-row {
+    display: flex; align-items: center; gap: 10px;
+    width: 100%;
+    background: var(--bg-cream);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 14px;
+    text-align: left;
+  }
+  .seed-row:active { transform: scale(0.98); }
+  .seed-row .s-emoji { font-size: 22px; }
+  .seed-row .s-name { flex: 1; font-weight: 600; }
+  .seed-row .s-count { font-size: 12px; color: var(--ink-soft); font-weight: 700; }
+
   /* ===================== QUESTS & STREAK ===================== */
   .quest-card {
     background: var(--bg-cream);
@@ -1083,9 +1164,30 @@
     <div class="recent-grid" id="recentGrid"></div>
   </section>
 
-  <!-- ============= COLLECTION VIEW ============= -->
-  <section class="view" id="view-collection">
-    <div class="tabs">
+  <!-- ============= GARDEN VIEW ============= -->
+  <section class="view" id="view-garden">
+    <div class="garden-summary">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <div class="dex-lbl">Your native garden</div>
+          <div class="garden-nectar">🍯 <span id="nectarCount">0</span> nectar</div>
+        </div>
+        <button class="water-btn" id="waterBtn">💧 Water<br/>the garden</button>
+      </div>
+    </div>
+    <div class="garden-grid" id="gardenPlots"></div>
+    <p class="field-note" style="margin-top:16px;">Every find in the field gives you a seed. Growth happens on days you water — untended plants pause, they never die. 🌱</p>
+  </section>
+
+  <!-- ============= BOTANICA (Collection + Dex) ============= -->
+  <section class="view" id="view-botanica">
+    <div class="tabs" id="botanicaMode">
+      <button class="tab active" data-mode="collection">📔 Collection</button>
+      <button class="tab" data-mode="dex">📖 Dex</button>
+    </div>
+
+    <div id="botanica-collection">
+    <div class="tabs" id="collectionTabs">
       <button class="tab active" data-kingdom="all">All</button>
       <button class="tab" data-kingdom="plant">🌿 Herbarium</button>
       <button class="tab" data-kingdom="fungi">🍄 Mycarium</button>
@@ -1107,10 +1209,10 @@
     </div>
 
     <div class="collection-grid" id="collectionGrid"></div>
-  </section>
+    </div><!-- /botanica-collection -->
 
-  <!-- ============= DEX VIEW ============= -->
-  <section class="view" id="view-dex">
+    <!-- Dex mode -->
+    <div id="botanica-dex" style="display:none">
     <div class="dex-summary">
       <div style="display:flex; justify-content:space-between; align-items:baseline;">
         <div>
@@ -1133,6 +1235,7 @@
     </div>
 
     <div id="dexGrid"></div>
+    </div><!-- /botanica-dex -->
   </section>
 
   <!-- ============= MAP VIEW ============= -->
@@ -1172,8 +1275,8 @@
   <!-- ============= BOTTOM NAV ============= -->
   <nav class="bottom-nav">
     <button class="nav-btn active" data-view="discover"><span class="icon">📸</span><span>Discover</span></button>
-    <button class="nav-btn" data-view="collection"><span class="icon">📔</span><span>Collection</span></button>
-    <button class="nav-btn" data-view="dex"><span class="icon">📖</span><span>Dex</span></button>
+    <button class="nav-btn" data-view="garden"><span class="icon">🌱</span><span>Garden</span></button>
+    <button class="nav-btn" data-view="botanica"><span class="icon">📔</span><span>Botanica</span></button>
     <button class="nav-btn" data-view="map"><span class="icon">🗺️</span><span>Map</span></button>
     <button class="nav-btn" data-view="profile"><span class="icon">👤</span><span>Profile</span></button>
   </nav>
@@ -1459,6 +1562,240 @@ function pickSpecies() {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
+/* ============= THE GARDEN (Grow verb) ============= */
+// Full design: docs/GARDEN-DESIGN.md. Every find yields a seed; plant it in
+// a plot and tend the garden once a day. Growth stages take real tended days
+// scaled by rarity. Untended plants pause — nothing ever dies. All local,
+// no backend; day math shares dayKey() with quests and streaks.
+const STAGE_NAMES = ['Seed', 'Sprout', 'Juvenile', 'Mature', 'Flowering'];
+const STAGE_DAYS = { common: 1, uncommon: 2, rare: 4, legendary: 7 };   // tended days per stage
+const PLANT_NECTAR = { common: 5, uncommon: 10, rare: 25, legendary: 60 };
+const PLOT_COSTS = { 6: 50, 7: 75, 8: 100, 9: 150, 10: 200, 11: 300 }; // cost of the NEXT plot, keyed by current capacity
+const MAX_FREE_PLOTS = 12;
+const FERTILISER_COST = 30;
+const TEND_CAP = 15;
+
+function ensureGarden() {
+  if (!state.garden) state.garden = { nectar: 0, lastTend: null, plots: [], plotCapacity: 6 };
+  if (!state.seeds) state.seeds = {};
+}
+
+function speciesMeta(speciesId) {
+  const s = SPECIES.find(x => x.id === speciesId);
+  if (s) return s;
+  // Wild seed: ad-hoc iNat/Claude species — metadata lives on the discovery
+  const d = state.discoveries.find(x => x.speciesId === speciesId);
+  return d ? { id: speciesId, name: d.name, sci: d.sci, kingdom: d.kingdom, rarity: d.rarity || 'uncommon', emoji: d.emoji || (d.kingdom === 'fungi' ? '🍄' : '🌿') } : null;
+}
+
+function tendGarden() {
+  ensureGarden();
+  const today = dayKey();
+  if (state.garden.lastTend === today) return showToast('Already watered today 💧');
+  state.garden.lastTend = today;
+
+  let earned = 5; // base tend reward
+  const stageUps = [];
+  for (const p of state.garden.plots) {
+    if (p.stage >= 4) { earned += 1; continue; } // flowering plants yield daily nectar
+    p.daysTendedThisStage++;
+    if (p.daysTendedThisStage >= STAGE_DAYS[p.rarity]) {
+      p.stage++;
+      p.daysTendedThisStage = 0;
+      state.garden.nectar += 5; // stage-up bonus
+      if (p.stage === 4 && !p.everFlowered) {
+        p.everFlowered = true;
+        state.garden.nectar += 25; // first flowering of this specimen
+        stageUps.push(`🌸 ${p.name} is flowering!`);
+      } else {
+        stageUps.push(`🌱 ${p.name} → ${STAGE_NAMES[p.stage]}`);
+      }
+    }
+  }
+  earned = Math.min(earned, TEND_CAP);
+  state.garden.nectar += earned;
+  saveState();
+  renderGarden();
+  showToast(`💧 Garden watered · +${earned} nectar`);
+  stageUps.forEach((msg, i) => setTimeout(() => showToast(msg, 2600), 900 + i * 900));
+}
+
+function plotStageVisual(p) {
+  if (p.stage === 0) return { emoji: '🌰', size: 22 };
+  if (p.stage === 1) return { emoji: '🌱', size: 26 };
+  const size = [0, 0, 24, 32, 38][p.stage];
+  return { emoji: p.emoji, size };
+}
+
+function renderGarden() {
+  ensureGarden();
+  $('#nectarCount').textContent = state.garden.nectar;
+  const waterBtn = $('#waterBtn');
+  const watered = state.garden.lastTend === dayKey();
+  waterBtn.disabled = watered;
+  waterBtn.innerHTML = watered ? 'Watered today ✓' : '💧 Water<br/>the garden';
+
+  const g = state.garden;
+  let html = g.plots.map(p => {
+    const v = plotStageVisual(p);
+    return `<div class="plot ${p.stage >= 4 ? 'flowering' : ''}" data-plot="${p.id}">
+      <span class="p-emoji" style="font-size:${v.size}px">${v.emoji}</span>
+      <div class="p-name">${p.name}</div>
+      <div class="p-stage">${STAGE_NAMES[p.stage]}${p.stage >= 4 ? ' ✨' : ''}</div>
+    </div>`;
+  }).join('');
+
+  for (let i = g.plots.length; i < g.plotCapacity; i++) {
+    html += `<div class="plot empty" data-empty="1">
+      <span class="p-emoji" style="font-size:22px">🕳️</span>
+      <div class="p-stage">Plant a seed</div>
+    </div>`;
+  }
+  if (g.plotCapacity < MAX_FREE_PLOTS) {
+    html += `<div class="plot buy" data-buy="1">
+      <span class="p-emoji" style="font-size:20px">➕</span>
+      <div class="p-stage">New plot</div>
+      <div class="p-name" style="color:var(--ochre-deep)">🍯 ${PLOT_COSTS[g.plotCapacity]}</div>
+    </div>`;
+  }
+  $('#gardenPlots').innerHTML = html;
+
+  $$('#gardenPlots .plot[data-plot]').forEach(el => el.addEventListener('click', () => openPlot(el.dataset.plot)));
+  $$('#gardenPlots .plot[data-empty]').forEach(el => el.addEventListener('click', openSeedPicker));
+  $$('#gardenPlots .plot[data-buy]').forEach(el => el.addEventListener('click', buyPlot));
+}
+
+function buyPlot() {
+  ensureGarden();
+  const cost = PLOT_COSTS[state.garden.plotCapacity];
+  if (cost === undefined) return;
+  if (state.garden.nectar < cost) return showToast(`Need 🍯 ${cost} nectar for a new plot`);
+  state.garden.nectar -= cost;
+  state.garden.plotCapacity++;
+  saveState();
+  renderGarden();
+  showToast('🕳️ New plot dug!');
+}
+
+function openSeedPicker() {
+  ensureGarden();
+  const owned = Object.entries(state.seeds).filter(([, n]) => n > 0);
+  if (!owned.length) {
+    return openModal(`
+      <h2>🌰 No seeds yet</h2>
+      <p class="lead">Every find in the field gives you a seed of that species.</p>
+      <button class="btn" onclick="closeModal(); switchView('discover')">Go hunting</button>
+      <button class="btn secondary" onclick="closeModal()" style="margin-top:8px">Close</button>
+    `);
+  }
+  const rarityRank = { legendary: 0, rare: 1, uncommon: 2, common: 3 };
+  const rows = owned
+    .map(([sid, n]) => ({ meta: speciesMeta(sid), n, sid }))
+    .filter(x => x.meta)
+    .sort((a, b) => (rarityRank[a.meta.rarity] - rarityRank[b.meta.rarity]) || a.meta.name.localeCompare(b.meta.name))
+    .map(x => `<button class="seed-row" data-seed="${x.sid}">
+      <span class="s-emoji">${x.meta.emoji}</span>
+      <span class="s-name">${x.meta.name}<br/><span class="rarity-tag rarity-${x.meta.rarity}" style="font-size:9px; padding:1px 7px; border-radius:999px;">${RARITY[x.meta.rarity].label}</span></span>
+      <span class="s-count">×${x.n}</span>
+    </button>`).join('');
+  openModal(`
+    <h2>🌰 Choose a seed</h2>
+    <p class="lead">Planting earns nectar by rarity. Rarer seeds take longer to grow.</p>
+    ${rows}
+    <button class="btn secondary" onclick="closeModal()" style="margin-top:8px">Cancel</button>
+  `);
+  $$('#modalBody .seed-row').forEach(el => el.addEventListener('click', () => plantSeed(el.dataset.seed)));
+}
+
+function plantSeed(speciesId) {
+  ensureGarden();
+  if (state.garden.plots.length >= state.garden.plotCapacity) return showToast('No free plots');
+  if (!(state.seeds[speciesId] > 0)) return;
+  const meta = speciesMeta(speciesId);
+  if (!meta) return;
+  state.seeds[speciesId]--;
+  state.garden.plots.push({
+    id: uid(),
+    speciesId,
+    name: meta.name,
+    emoji: meta.emoji,
+    rarity: meta.rarity,
+    kingdom: meta.kingdom,
+    stage: 0,
+    daysTendedThisStage: 0,
+    everFlowered: false,
+    plantedDay: dayKey(),
+  });
+  state.garden.nectar += PLANT_NECTAR[meta.rarity] || 10;
+  saveState();
+  closeModal();
+  renderGarden();
+  showToast(`🌰 ${meta.name} planted · +${PLANT_NECTAR[meta.rarity] || 10} nectar`);
+}
+
+function openPlot(plotId) {
+  ensureGarden();
+  const p = state.garden.plots.find(x => x.id === plotId);
+  if (!p) return;
+  const meta = speciesMeta(p.speciesId) || p;
+  const need = STAGE_DAYS[p.rarity];
+  const grown = p.stage >= 4;
+  const latestFind = state.discoveries.filter(d => d.speciesId === p.speciesId).sort((a, b) => b.ts - a.ts)[0];
+  const v = plotStageVisual(p);
+  openModal(`
+    ${p.kingdom === 'fungi' ? `
+      <div class="fungus-warning">
+        <span class="warn-icon">⚠️</span>
+        <div><b>Never eat wild fungi based on app identification alone.</b> This app is for observation and collection only.</div>
+      </div>` : ''}
+    <h2><span style="font-size:${Math.max(v.size, 24)}px">${v.emoji}</span> ${p.name}</h2>
+    <p class="lead" style="font-style:italic">${meta.sci || ''}</p>
+    <div class="result-meta">
+      <div class="meta-item"><div class="meta-lbl">Stage</div><div class="meta-val">${STAGE_NAMES[p.stage]}${grown ? ' ✨' : ''}</div></div>
+      <div class="meta-item"><div class="meta-lbl">Rarity</div><div class="meta-val">${RARITY[p.rarity].label}</div></div>
+      ${grown
+        ? `<div class="meta-item" style="grid-column:1/-1"><div class="meta-lbl">Yield</div><div class="meta-val">+1 nectar every watered day</div></div>`
+        : `<div class="meta-item" style="grid-column:1/-1"><div class="meta-lbl">Progress to ${STAGE_NAMES[p.stage + 1]}</div><div class="meta-val">${p.daysTendedThisStage}/${need} watered days</div></div>`}
+    </div>
+    ${grown ? '' : `<button class="btn" id="fertBtn" style="margin-top:14px" ${state.garden.nectar < FERTILISER_COST ? 'disabled' : ''}>🍯 Fertilise — count an extra day (${FERTILISER_COST} nectar)</button>`}
+    ${latestFind ? `<button class="btn secondary" id="plotFindBtn" style="margin-top:8px">📸 View your find</button>` : ''}
+    <button class="btn secondary" onclick="closeModal()" style="margin-top:8px">Close</button>
+    <button class="btn" id="plotRemoveBtn" style="margin-top:8px; background:#a55045;">Remove plant</button>
+  `);
+  $('#fertBtn')?.addEventListener('click', () => fertilise(p.id));
+  $('#plotFindBtn')?.addEventListener('click', () => showDetail(latestFind.id));
+  $('#plotRemoveBtn')?.addEventListener('click', () => {
+    if (!confirm(`Remove ${p.name} from this plot? The seed is not refunded.`)) return;
+    state.garden.plots = state.garden.plots.filter(x => x.id !== p.id);
+    saveState();
+    closeModal();
+    renderGarden();
+    showToast('Plot cleared');
+  });
+}
+
+function fertilise(plotId) {
+  ensureGarden();
+  const p = state.garden.plots.find(x => x.id === plotId);
+  if (!p || p.stage >= 4 || state.garden.nectar < FERTILISER_COST) return;
+  state.garden.nectar -= FERTILISER_COST;
+  p.daysTendedThisStage++;
+  let msg = `🍯 Fertilised ${p.name}`;
+  if (p.daysTendedThisStage >= STAGE_DAYS[p.rarity]) {
+    p.stage++;
+    p.daysTendedThisStage = 0;
+    state.garden.nectar += 5;
+    if (p.stage === 4 && !p.everFlowered) { p.everFlowered = true; state.garden.nectar += 25; }
+    msg = p.stage >= 4 ? `🌸 ${p.name} is flowering!` : `🌱 ${p.name} → ${STAGE_NAMES[p.stage]}`;
+  }
+  saveState();
+  closeModal();
+  renderGarden();
+  showToast(msg, 2600);
+}
+
+$('#waterBtn').addEventListener('click', tendGarden);
+
 /* ============= DAILY QUESTS & STREAK ============= */
 // Two quests rotate daily, picked deterministically from the pool by the
 // date — no server needed, and everyone in the world gets the same pair.
@@ -1529,6 +1866,8 @@ function evaluateQuests(discovery) {
     if (passed) {
       state.quests.completed[q.id] = true;
       state.bonusXP = (state.bonusXP || 0) + q.xp;
+      ensureGarden();
+      state.garden.nectar += 10; // nectar rider on every quest
       completedNow.push(q);
     }
   }
@@ -1696,8 +2035,8 @@ function switchView(view) {
   $$('.nav-btn').forEach(n => n.classList.remove('active'));
   $('#view-' + view).classList.add('active');
   $$(`.nav-btn[data-view="${view}"]`).forEach(n => n.classList.add('active'));
-  if (view === 'collection') renderCollection();
-  if (view === 'dex') renderDex();
+  if (view === 'botanica') renderBotanica();
+  if (view === 'garden') renderGarden();
   if (view === 'profile') renderProfile();
   if (view === 'map') setTimeout(initOrUpdateMap, 50);
   if (view === 'discover') renderRecent();
@@ -1717,7 +2056,7 @@ $$('#dexTabs .tab').forEach(tab => {
     $$('#dexTabs .tab').forEach(t => t.classList.remove('active'));
     tab.classList.add('active');
     dexKingdom = tab.dataset.kingdom;
-    $('#view-dex').classList.toggle('fungi-theme', dexKingdom === 'fungi');
+    $('#botanica-dex').classList.toggle('fungi-theme', dexKingdom === 'fungi');
     renderDex();
   });
 });
@@ -2471,7 +2810,7 @@ async function backgroundSync() {
     state.discoveries = [...merged, ...localUnpushed];
     saveState();
     renderRecent();
-    if ($('#view-collection').classList.contains('active')) renderCollection();
+    if ($('#view-botanica').classList.contains('active')) renderBotanica();
   } catch (e) {
     console.error('Background sync failed:', e);
     showToast('☁️ Sync error: ' + (e.message || 'unknown'));
@@ -2916,7 +3255,7 @@ function showResult(species, photo, loc, suburb) {
       btn.textContent = 'Added ✓';
       addDiscovery(species, photo, loc, suburb, isLocalLegend);
       closeModal();
-      showToast(`+${xp} XP — added to ${isFungi ? 'Mycarium' : 'Herbarium'}`);
+      showToast(`+${xp} XP · added to ${isFungi ? 'Mycarium' : 'Herbarium'} · 🌰 seed collected`, 2800);
     }, { once: true });        // belt-and-braces: listener auto-removes after first fire
   }
   saveState();
@@ -2944,6 +3283,8 @@ function addDiscovery(species, photo, loc, suburb, isLocalLegend) {
     ts: Date.now(),
   };
   state.discoveries.push(discovery);
+  ensureGarden();
+  state.seeds[discovery.speciesId] = (state.seeds[discovery.speciesId] || 0) + 1; // every find yields a seed
   bumpStreak();
   evaluateQuests(discovery);
   saveState();
@@ -3042,14 +3383,31 @@ function renderRecent() {
   });
 }
 
+/* ============= BOTANICA (Collection + Dex) ============= */
+let botanicaMode = 'collection';
+$$('#botanicaMode .tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    $$('#botanicaMode .tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    botanicaMode = tab.dataset.mode;
+    renderBotanica();
+  });
+});
+
+function renderBotanica() {
+  $('#botanica-collection').style.display = botanicaMode === 'collection' ? '' : 'none';
+  $('#botanica-dex').style.display = botanicaMode === 'dex' ? '' : 'none';
+  if (botanicaMode === 'collection') renderCollection(); else renderDex();
+}
+
 /* ============= COLLECTION VIEW ============= */
 let activeKingdom = 'all';
-$$('.tabs .tab').forEach(tab => {
+$$('#collectionTabs .tab').forEach(tab => {
   tab.addEventListener('click', () => {
-    $$('.tabs .tab').forEach(t => t.classList.remove('active'));
+    $$('#collectionTabs .tab').forEach(t => t.classList.remove('active'));
     tab.classList.add('active');
     activeKingdom = tab.dataset.kingdom;
-    $('#view-collection').classList.toggle('fungi-theme', activeKingdom === 'fungi');
+    $('#botanica-collection').classList.toggle('fungi-theme', activeKingdom === 'fungi');
     renderCollection();
   });
 });
@@ -3143,7 +3501,7 @@ function deleteDiscovery(id) {
   closeModal();
   renderCollection();
   renderRecent();
-  if ($('#view-dex').classList.contains('active')) renderDex(); // detail modal can be opened from the Dex
+  if ($('#view-botanica').classList.contains('active')) renderBotanica(); // detail modal can be opened from the Dex
   updateHeader();
   showToast('Removed from collection');
   // Fire-and-forget cloud delete if signed in
