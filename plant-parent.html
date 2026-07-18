@@ -589,6 +589,28 @@
     backdrop-filter: blur(4px);
   }
 
+  /* ===================== LIMITED-TIME EVENTS ===================== */
+  .event-card {
+    border-radius: 16px;
+    padding: 16px;
+    margin-bottom: 20px;
+    color: var(--bg-cream);
+    background: linear-gradient(135deg, var(--evt-a, var(--plant-mid)), var(--evt-b, var(--plant-soft)));
+    position: relative;
+    overflow: hidden;
+  }
+  .event-card.upcoming { background: var(--bg-cream); color: var(--ink); border: 1px dashed var(--sandstone); }
+  .event-card.done { background: linear-gradient(135deg, var(--ochre), var(--rust)); }
+  .event-eyebrow { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; opacity: 0.85; }
+  .event-title { font-size: 20px; font-weight: 800; margin: 2px 0 4px; }
+  .event-desc { font-size: 13px; opacity: 0.92; margin-bottom: 12px; line-height: 1.4; }
+  .event-card.upcoming .event-desc { opacity: 0.75; }
+  .event-progress-track { background: rgba(0,0,0,0.18); height: 10px; border-radius: 999px; overflow: hidden; }
+  .event-card.upcoming .event-progress-track { background: rgba(0,0,0,0.08); }
+  .event-progress-fill { height: 100%; background: var(--bg-cream); border-radius: 999px; transition: width 0.4s; }
+  .event-meta { display: flex; justify-content: space-between; font-size: 12px; margin-top: 6px; font-weight: 600; }
+  .event-reward { font-size: 12px; margin-top: 10px; opacity: 0.92; }
+
   /* ===================== GARDEN VIEW ===================== */
   .garden-summary {
     background: linear-gradient(135deg, var(--plant-deep), var(--plant-mid));
@@ -1159,6 +1181,7 @@
     <p class="field-note">Plant Parent is a live treasure hunt. Photos must come from your camera in the field — no gallery uploads. 🌿</p>
 
     <div class="quest-card" id="questCard"></div>
+    <div id="eventCard"></div>
 
     <div class="section-title">Recent finds</div>
     <div class="recent-grid" id="recentGrid"></div>
@@ -1795,6 +1818,111 @@ function fertilise(plotId) {
 }
 
 $('#waterBtn').addEventListener('click', tendGarden);
+
+/* ============= LIMITED-TIME EVENTS ============= */
+// A reusable date-windowed event engine. Each event features a slice of
+// species and a find goal; completing it grants nectar, exclusive event
+// seeds for the Garden, and a badge. This is the pipeline the Phase 5 launch
+// Bioblitz (Autumn Fungi Foray) runs on. Windows use [month, day] and may
+// wrap the year end. Progress lives in state.events[id].
+const EVENTS = [
+  {
+    id: 'spring-bloom-2026',
+    name: 'Spring Bloom',
+    emoji: '🌸',
+    start: [9, 1], end: [11, 30],           // Sep–Nov: southern spring
+    colorA: '#6b8e5a', colorB: '#c9974a',
+    desc: 'Wildflowers are out across the country. Log native plants in bloom.',
+    goal: 8,
+    match: s => s.kingdom === 'plant',
+    reward: { nectar: 120, seedSpeciesId: 'p016', seedCount: 3, badge: { id: 'spring-herald', name: 'Spring Herald', icon: '🌸' } },
+  },
+  {
+    id: 'autumn-fungi-foray-2027',
+    name: 'Autumn Fungi Foray',
+    emoji: '🍄',
+    start: [3, 1], end: [5, 31],            // Mar–May: southern autumn, peak fungi
+    colorA: '#5d3f2c', colorB: '#a0522d',
+    desc: 'Fungi are fruiting. Log as many species as you can find on wood and leaf litter.',
+    goal: 8,
+    match: s => s.kingdom === 'fungi',
+    reward: { nectar: 120, seedSpeciesId: 'f016', seedCount: 3, badge: { id: 'foray-founder', name: 'Foray Founder', icon: '🍄' } },
+  },
+];
+
+function inWindow(ev, date = new Date()) {
+  const md = (date.getMonth() + 1) * 100 + date.getDate();
+  const s = ev.start[0] * 100 + ev.start[1];
+  const e = ev.end[0] * 100 + ev.end[1];
+  return s <= e ? (md >= s && md <= e) : (md >= s || md <= e); // handle year-wrap
+}
+
+function daysUntil(monthDay, from = new Date()) {
+  const [m, d] = monthDay;
+  let target = new Date(from.getFullYear(), m - 1, d);
+  if (target < from) target = new Date(from.getFullYear() + 1, m - 1, d);
+  return Math.ceil((target - from) / 86400000);
+}
+
+function activeEvent(date = new Date()) { return EVENTS.find(ev => inWindow(ev, date)) || null; }
+function upcomingEvent(from = new Date()) {
+  return EVENTS.filter(ev => !inWindow(ev, from))
+    .map(ev => ({ ev, days: daysUntil(ev.start, from) }))
+    .sort((a, b) => a.days - b.days)[0] || null;
+}
+
+function evaluateEvent(discovery) {
+  const ev = activeEvent();
+  if (!ev || !ev.match(discovery)) return;
+  if (!state.events) state.events = {};
+  const rec = state.events[ev.id] || { count: 0, done: false };
+  if (rec.done) return;
+  rec.count++;
+  if (rec.count >= ev.goal) {
+    rec.done = true;
+    ensureGarden();
+    state.garden.nectar += ev.reward.nectar;
+    state.seeds[ev.reward.seedSpeciesId] = (state.seeds[ev.reward.seedSpeciesId] || 0) + ev.reward.seedCount;
+    if (!state.eventBadges) state.eventBadges = [];
+    if (!state.eventBadges.includes(ev.reward.badge.id)) state.eventBadges.push(ev.reward.badge.id);
+    setTimeout(() => showToast(`${ev.emoji} ${ev.name} complete! Badge earned + ${ev.reward.seedCount} event seeds`, 3400), 1300);
+  }
+  state.events[ev.id] = rec;
+}
+
+function renderEventCard() {
+  const card = $('#eventCard');
+  if (!card) return;
+  const ev = activeEvent();
+  if (ev) {
+    const rec = (state.events && state.events[ev.id]) || { count: 0, done: false };
+    const pct = Math.min(100, Math.round((rec.count / ev.goal) * 100));
+    const daysLeft = daysUntil(ev.end);
+    const seedName = (speciesMeta(ev.reward.seedSpeciesId) || {}).name || 'a rare';
+    card.className = 'event-card' + (rec.done ? ' done' : '');
+    card.style.setProperty('--evt-a', ev.colorA);
+    card.style.setProperty('--evt-b', ev.colorB);
+    card.innerHTML = `
+      <div class="event-eyebrow">${ev.emoji} Limited-time event · ${daysLeft} day${daysLeft === 1 ? '' : 's'} left</div>
+      <div class="event-title">${ev.name}</div>
+      <div class="event-desc">${rec.done ? 'Complete! Your event seeds are waiting in the Garden.' : ev.desc}</div>
+      <div class="event-progress-track"><div class="event-progress-fill" style="width:${pct}%"></div></div>
+      <div class="event-meta"><span>${Math.min(rec.count, ev.goal)}/${ev.goal} logged</span><span>${rec.done ? '✅ ' + ev.reward.badge.name : '🏅 ' + ev.reward.badge.name}</span></div>
+      ${rec.done ? '' : `<div class="event-reward">Reward: ${ev.reward.nectar} nectar · ${ev.reward.seedCount}× ${seedName} seeds · exclusive badge</div>`}`;
+    return;
+  }
+  const up = upcomingEvent();
+  if (up) {
+    card.className = 'event-card upcoming';
+    card.style.removeProperty('--evt-a');
+    card.innerHTML = `
+      <div class="event-eyebrow" style="color:var(--ochre-deep)">${up.ev.emoji} Coming soon · in ${up.days} day${up.days === 1 ? '' : 's'}</div>
+      <div class="event-title">${up.ev.name}</div>
+      <div class="event-desc">${up.ev.desc}</div>`;
+  } else {
+    card.innerHTML = '';
+  }
+}
 
 /* ============= IN-SEASON BONUSES ============= */
 // Southern-hemisphere flowering/fruiting windows by species group. A find
@@ -3313,6 +3441,7 @@ function addDiscovery(species, photo, loc, suburb, isLocalLegend) {
   state.seeds[discovery.speciesId] = (state.seeds[discovery.speciesId] || 0) + 1; // every find yields a seed
   bumpStreak();
   evaluateQuests(discovery);
+  evaluateEvent(discovery);
   saveState();
   checkBadges();
   updateHeader();
@@ -3390,6 +3519,7 @@ function showUpgradeModal() {
 /* ============= DISCOVER — RECENT ============= */
 function renderRecent() {
   renderQuests();
+  renderEventCard();
   const grid = $('#recentGrid');
   const recent = state.discoveries.slice(-6).reverse();
   let html = '';
@@ -3719,9 +3849,17 @@ function renderProfile() {
     $('#upgradeBtn')?.addEventListener('click', showUpgradeModal);
   }
 
-  // Badges
+  // Badges — standard + any earned event badges
+  const eventBadgeDefs = EVENTS.map(ev => ({ ...ev.reward.badge, desc: `${ev.name} event` }));
+  const earnedEventBadges = eventBadgeDefs.filter(b => (state.eventBadges || []).includes(b.id));
   $('#badgesGrid').innerHTML = BADGES.map(b => `
     <div class="badge ${state.badges.includes(b.id) ? '' : 'locked'}">
+      <span class="b-icon">${b.icon}</span>
+      <div class="b-name">${b.name}</div>
+      <div class="b-desc">${b.desc}</div>
+    </div>
+  `).join('') + earnedEventBadges.map(b => `
+    <div class="badge" style="border-color:var(--ochre)">
       <span class="b-icon">${b.icon}</span>
       <div class="b-name">${b.name}</div>
       <div class="b-desc">${b.desc}</div>
