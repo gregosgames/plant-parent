@@ -589,6 +589,28 @@
     backdrop-filter: blur(4px);
   }
 
+  /* ===================== LIMITED-TIME EVENTS ===================== */
+  .event-card {
+    border-radius: 16px;
+    padding: 16px;
+    margin-bottom: 20px;
+    color: var(--bg-cream);
+    background: linear-gradient(135deg, var(--evt-a, var(--plant-mid)), var(--evt-b, var(--plant-soft)));
+    position: relative;
+    overflow: hidden;
+  }
+  .event-card.upcoming { background: var(--bg-cream); color: var(--ink); border: 1px dashed var(--sandstone); }
+  .event-card.done { background: linear-gradient(135deg, var(--ochre), var(--rust)); }
+  .event-eyebrow { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; opacity: 0.85; }
+  .event-title { font-size: 20px; font-weight: 800; margin: 2px 0 4px; }
+  .event-desc { font-size: 13px; opacity: 0.92; margin-bottom: 12px; line-height: 1.4; }
+  .event-card.upcoming .event-desc { opacity: 0.75; }
+  .event-progress-track { background: rgba(0,0,0,0.18); height: 10px; border-radius: 999px; overflow: hidden; }
+  .event-card.upcoming .event-progress-track { background: rgba(0,0,0,0.08); }
+  .event-progress-fill { height: 100%; background: var(--bg-cream); border-radius: 999px; transition: width 0.4s; }
+  .event-meta { display: flex; justify-content: space-between; font-size: 12px; margin-top: 6px; font-weight: 600; }
+  .event-reward { font-size: 12px; margin-top: 10px; opacity: 0.92; }
+
   /* ===================== GARDEN VIEW ===================== */
   .garden-summary {
     background: linear-gradient(135deg, var(--plant-deep), var(--plant-mid));
@@ -875,6 +897,34 @@
     display: flex; justify-content: space-between;
   }
 
+  /* ===================== LEADERBOARD ===================== */
+  .lb-title {
+    font-size: 13px; font-weight: 700; color: var(--plant-deep);
+    margin-bottom: 8px;
+  }
+  .lb-row {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--bg-cream);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin-bottom: 6px;
+    font-size: 14px;
+  }
+  .lb-row.me { border-color: var(--plant-soft); background: rgba(143,169,120,0.12); }
+  .lb-rank { width: 28px; text-align: center; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .lb-handle { flex: 1; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lb-score { font-size: 12px; font-weight: 700; color: var(--ochre-deep); flex-shrink: 0; }
+  .lb-empty {
+    background: var(--bg-cream);
+    border: 1px dashed var(--sandstone);
+    border-radius: 10px;
+    padding: 14px;
+    font-size: 13px;
+    color: var(--ink-soft);
+    line-height: 1.45;
+  }
+
   /* ===================== BUTTONS ===================== */
   button.btn {
     background: var(--plant-deep);
@@ -1159,6 +1209,7 @@
     <p class="field-note">Plant Parent is a live treasure hunt. Photos must come from your camera in the field — no gallery uploads. 🌿</p>
 
     <div class="quest-card" id="questCard"></div>
+    <div id="eventCard"></div>
 
     <div class="section-title">Recent finds</div>
     <div class="recent-grid" id="recentGrid"></div>
@@ -1270,6 +1321,9 @@
 
     <div class="section-title">Badges</div>
     <div class="badges-grid" id="badgesGrid"></div>
+
+    <div class="section-title">Local Legends</div>
+    <div id="leaderboard"></div>
   </section>
 
   <!-- ============= BOTTOM NAV ============= -->
@@ -1303,11 +1357,11 @@
 /* ============= STATIC SPECIES TABLE ============= */
 const SPECIES = [
   // ===== PLANTS — COMMON =====
-  { id:'p001', name:'Tasmanian Blue Gum', sci:'Eucalyptus globulus', kingdom:'plant', rarity:'common', emoji:'🌳' },
+  { id:'p001', name:'Tasmanian Blue Gum', sci:'Eucalyptus globulus', kingdom:'plant', rarity:'uncommon', emoji:'🌳' },
   { id:'p002', name:'Blackwood', sci:'Acacia melanoxylon', kingdom:'plant', rarity:'common', emoji:'🌿' },
   { id:'p003', name:'Coast Banksia', sci:'Banksia integrifolia', kingdom:'plant', rarity:'common', emoji:'🌼' },
-  { id:'p004', name:'Silky Oak', sci:'Grevillea robusta', kingdom:'plant', rarity:'common', emoji:'🌳' },
-  { id:'p005', name:'Crimson Bottlebrush', sci:'Callistemon citrinus', kingdom:'plant', rarity:'common', emoji:'🌺' },
+  { id:'p004', name:'Silky Oak', sci:'Grevillea robusta', kingdom:'plant', rarity:'uncommon', emoji:'🌳' },
+  { id:'p005', name:'Crimson Bottlebrush', sci:'Callistemon citrinus', kingdom:'plant', rarity:'uncommon', emoji:'🌺' },
   { id:'p006', name:'River Red Gum', sci:'Eucalyptus camaldulensis', kingdom:'plant', rarity:'common', emoji:'🌳' },
   { id:'p007', name:'Silver Wattle', sci:'Acacia dealbata', kingdom:'plant', rarity:'common', emoji:'🌿' },
   { id:'p008', name:'Saw Banksia', sci:'Banksia serrata', kingdom:'plant', rarity:'common', emoji:'🌼' },
@@ -1315,36 +1369,36 @@ const SPECIES = [
   { id:'p010', name:'Native Sarsaparilla', sci:'Hardenbergia violacea', kingdom:'plant', rarity:'common', emoji:'💜' },
   { id:'p011', name:'Forest Red Gum', sci:'Eucalyptus tereticornis', kingdom:'plant', rarity:'common', emoji:'🌳' },
   { id:'p012', name:'Sydney Golden Wattle', sci:'Acacia longifolia', kingdom:'plant', rarity:'common', emoji:'💛' },
-  { id:'p013', name:'Heath Banksia', sci:'Banksia ericifolia', kingdom:'plant', rarity:'common', emoji:'🌼' },
+  { id:'p013', name:'Heath Banksia', sci:'Banksia ericifolia', kingdom:'plant', rarity:'uncommon', emoji:'🌼' },
   { id:'p014', name:'Spiny-headed Mat-rush', sci:'Lomandra longifolia', kingdom:'plant', rarity:'common', emoji:'🌾' },
   { id:'p015', name:'Spotted Gum', sci:'Corymbia maculata', kingdom:'plant', rarity:'common', emoji:'🌳' },
 
   // ===== PLANTS — UNCOMMON =====
   { id:'p016', name:'NSW Waratah', sci:'Telopea speciosissima', kingdom:'plant', rarity:'uncommon', emoji:'🌹' },
   { id:'p017', name:'Grass Tree', sci:'Xanthorrhoea australis', kingdom:'plant', rarity:'uncommon', emoji:'🌴' },
-  { id:'p018', name:'Scarlet Banksia', sci:'Banksia coccinea', kingdom:'plant', rarity:'uncommon', emoji:'🌺' },
+  { id:'p018', name:'Scarlet Banksia', sci:'Banksia coccinea', kingdom:'plant', rarity:'rare', emoji:'🌺' },
   { id:'p019', name:'Mountain Ash', sci:'Eucalyptus regnans', kingdom:'plant', rarity:'uncommon', emoji:'🌲' },
-  { id:'p020', name:'Golden Wattle', sci:'Acacia pycnantha', kingdom:'plant', rarity:'uncommon', emoji:'💛' },
+  { id:'p020', name:'Golden Wattle', sci:'Acacia pycnantha', kingdom:'plant', rarity:'common', emoji:'💛' },
   { id:'p021', name:'Gymea Lily', sci:'Doryanthes excelsa', kingdom:'plant', rarity:'uncommon', emoji:'🌹' },
-  { id:'p022', name:'Red & Green Kangaroo Paw', sci:'Anigozanthos manglesii', kingdom:'plant', rarity:'uncommon', emoji:'🌷' },
+  { id:'p022', name:'Red & Green Kangaroo Paw', sci:'Anigozanthos manglesii', kingdom:'plant', rarity:'rare', emoji:'🌷' },
   { id:'p023', name:'Burrawang', sci:'Macrozamia communis', kingdom:'plant', rarity:'uncommon', emoji:'🌴' },
   { id:'p024', name:'Firewood Banksia', sci:'Banksia menziesii', kingdom:'plant', rarity:'uncommon', emoji:'🌼' },
-  { id:'p025', name:'Pin-cushion Hakea', sci:'Hakea laurina', kingdom:'plant', rarity:'uncommon', emoji:'🌸' },
-  { id:'p026', name:'Brown Boronia', sci:'Boronia megastigma', kingdom:'plant', rarity:'uncommon', emoji:'🌸' },
-  { id:'p027', name:'Rough Tree Fern', sci:'Cyathea australis', kingdom:'plant', rarity:'uncommon', emoji:'🌿' },
-  { id:'p028', name:'Sturt\'s Desert Pea', sci:'Swainsona formosa', kingdom:'plant', rarity:'uncommon', emoji:'🌹' },
+  { id:'p025', name:'Pin-cushion Hakea', sci:'Hakea laurina', kingdom:'plant', rarity:'rare', emoji:'🌸' },
+  { id:'p026', name:'Brown Boronia', sci:'Boronia megastigma', kingdom:'plant', rarity:'rare', emoji:'🌸' },
+  { id:'p027', name:'Rough Tree Fern', sci:'Cyathea australis', kingdom:'plant', rarity:'common', emoji:'🌿' },
+  { id:'p028', name:'Sturt\'s Desert Pea', sci:'Swainsona formosa', kingdom:'plant', rarity:'rare', emoji:'🌹' },
 
   // ===== PLANTS — RARE =====
-  { id:'p029', name:'Wollemi Pine', sci:'Wollemia nobilis', kingdom:'plant', rarity:'rare', emoji:'🌲' },
+  { id:'p029', name:'Wollemi Pine', sci:'Wollemia nobilis', kingdom:'plant', rarity:'legendary', emoji:'🌲' },
   { id:'p030', name:'Silver Princess', sci:'Eucalyptus caesia', kingdom:'plant', rarity:'rare', emoji:'🌳' },
   { id:'p031', name:'Monga Waratah', sci:'Telopea mongaensis', kingdom:'plant', rarity:'rare', emoji:'🌹' },
   { id:'p032', name:'Feather-leaved Banksia', sci:'Banksia brownii', kingdom:'plant', rarity:'rare', emoji:'🌼' },
   { id:'p033', name:'Giant Sundew', sci:'Drosera gigantea', kingdom:'plant', rarity:'rare', emoji:'🌱' },
-  { id:'p034', name:'WA Christmas Tree', sci:'Nuytsia floribunda', kingdom:'plant', rarity:'rare', emoji:'🎄' },
-  { id:'p035', name:'Silky Emu Bush', sci:'Eremophila nivea', kingdom:'plant', rarity:'rare', emoji:'💜' },
+  { id:'p034', name:'WA Christmas Tree', sci:'Nuytsia floribunda', kingdom:'plant', rarity:'uncommon', emoji:'🎄' },
+  { id:'p035', name:'Silky Emu Bush', sci:'Eremophila nivea', kingdom:'plant', rarity:'legendary', emoji:'💜' },
   { id:'p036', name:'Royal Hakea', sci:'Hakea victoria', kingdom:'plant', rarity:'rare', emoji:'🍂' },
   { id:'p037', name:'Scarlet Featherflower', sci:'Verticordia grandis', kingdom:'plant', rarity:'rare', emoji:'🌺' },
-  { id:'p038', name:'Blue Caladenia', sci:'Caladenia caerulea', kingdom:'plant', rarity:'rare', emoji:'💙' },
+  { id:'p038', name:'Blue Caladenia', sci:'Caladenia caerulea', kingdom:'plant', rarity:'legendary', emoji:'💙' },
 
   // ===== PLANTS — LEGENDARY =====
   { id:'p039', name:'Matchstick Banksia', sci:'Banksia cuneata', kingdom:'plant', rarity:'legendary', emoji:'✨' },
@@ -1357,32 +1411,32 @@ const SPECIES = [
   { id:'f001', name:'Turkey Tail', sci:'Trametes versicolor', kingdom:'fungi', rarity:'common', emoji:'🍂' },
   { id:'f002', name:'Split Gill', sci:'Schizophyllum commune', kingdom:'fungi', rarity:'common', emoji:'🍄' },
   { id:'f003', name:'Pixie\'s Parasol', sci:'Mycena interrupta', kingdom:'fungi', rarity:'common', emoji:'💙' },
-  { id:'f004', name:'Earthball', sci:'Scleroderma cepa', kingdom:'fungi', rarity:'common', emoji:'🟤' },
-  { id:'f005', name:'Australian Honey Fungus', sci:'Armillaria luteobubalina', kingdom:'fungi', rarity:'common', emoji:'🍯' },
-  { id:'f006', name:'Wood Ear', sci:'Auricularia cornea', kingdom:'fungi', rarity:'common', emoji:'👂' },
+  { id:'f004', name:'Earthball', sci:'Scleroderma cepa', kingdom:'fungi', rarity:'uncommon', emoji:'🟤' },
+  { id:'f005', name:'Australian Honey Fungus', sci:'Armillaria luteobubalina', kingdom:'fungi', rarity:'uncommon', emoji:'🍯' },
+  { id:'f006', name:'Wood Ear', sci:'Auricularia cornea', kingdom:'fungi', rarity:'rare', emoji:'👂' },
 
   // ===== FUNGI — UNCOMMON =====
-  { id:'f007', name:'Ghost Fungus', sci:'Omphalotus nidiformis', kingdom:'fungi', rarity:'uncommon', emoji:'👻' },
+  { id:'f007', name:'Ghost Fungus', sci:'Omphalotus nidiformis', kingdom:'fungi', rarity:'common', emoji:'👻' },
   { id:'f008', name:'Anemone Stinkhorn', sci:'Aseroe rubra', kingdom:'fungi', rarity:'uncommon', emoji:'❤️' },
-  { id:'f009', name:'Basket Fungus', sci:'Ileodictyon cibarium', kingdom:'fungi', rarity:'uncommon', emoji:'🧺' },
-  { id:'f010', name:'White Jelly Fungus', sci:'Tremella fuciformis', kingdom:'fungi', rarity:'uncommon', emoji:'🤍' },
-  { id:'f011', name:'Dyeball', sci:'Pisolithus tinctorius', kingdom:'fungi', rarity:'uncommon', emoji:'🟫' },
-  { id:'f012', name:'Veiled Lady', sci:'Phallus indusiatus', kingdom:'fungi', rarity:'uncommon', emoji:'🤍' },
+  { id:'f009', name:'Basket Fungus', sci:'Ileodictyon cibarium', kingdom:'fungi', rarity:'legendary', emoji:'🧺' },
+  { id:'f010', name:'White Jelly Fungus', sci:'Tremella fuciformis', kingdom:'fungi', rarity:'common', emoji:'🤍' },
+  { id:'f011', name:'Dyeball', sci:'Pisolithus tinctorius', kingdom:'fungi', rarity:'legendary', emoji:'🟫' },
+  { id:'f012', name:'Veiled Lady', sci:'Phallus indusiatus', kingdom:'fungi', rarity:'rare', emoji:'🤍' },
   { id:'f013', name:'Native Bolete', sci:'Boletellus obscurecoccineus', kingdom:'fungi', rarity:'uncommon', emoji:'🍄' },
 
   // ===== FUNGI — RARE =====
-  { id:'f014', name:'Emperor Cortinarius', sci:'Cortinarius archeri', kingdom:'fungi', rarity:'rare', emoji:'💜' },
+  { id:'f014', name:'Emperor Cortinarius', sci:'Cortinarius archeri', kingdom:'fungi', rarity:'uncommon', emoji:'💜' },
   { id:'f015', name:'Sky Blue Mushroom', sci:'Entoloma virescens', kingdom:'fungi', rarity:'rare', emoji:'💙' },
   { id:'f016', name:'Bioluminescent Mycena', sci:'Mycena chlorophos', kingdom:'fungi', rarity:'rare', emoji:'✨' },
   { id:'f017', name:'Vermilion Waxcap', sci:'Hygrocybe miniata', kingdom:'fungi', rarity:'rare', emoji:'❤️' },
-  { id:'f018', name:'Spectacular Rustgill', sci:'Gymnopilus junonius', kingdom:'fungi', rarity:'rare', emoji:'🟠' },
+  { id:'f018', name:'Spectacular Rustgill', sci:'Gymnopilus junonius', kingdom:'fungi', rarity:'common', emoji:'🟠' },
   { id:'f019', name:'Beech Orange', sci:'Cyttaria gunnii', kingdom:'fungi', rarity:'rare', emoji:'🟠' },
 
   // ===== FUNGI — LEGENDARY =====
   { id:'f020', name:'Native Truffle', sci:'Tuber oligospermum', kingdom:'fungi', rarity:'legendary', emoji:'✨' },
-  { id:'f021', name:'Elegant Blue Webcap', sci:'Cortinarius rotundisporus', kingdom:'fungi', rarity:'legendary', emoji:'✨' },
-  { id:'f022', name:'Coral Tooth', sci:'Hericium coralloides', kingdom:'fungi', rarity:'legendary', emoji:'✨' },
-  { id:'f023', name:'Barragee Bolete', sci:'Boletus barragensis', kingdom:'fungi', rarity:'legendary', emoji:'✨' },
+  { id:'f021', name:'Elegant Blue Webcap', sci:'Cortinarius rotundisporus', kingdom:'fungi', rarity:'uncommon', emoji:'✨' },
+  { id:'f022', name:'Coral Tooth', sci:'Hericium coralloides', kingdom:'fungi', rarity:'rare', emoji:'✨' },
+  { id:'f023', name:'Barragee Bolete', sci:'Boletus barragensis', kingdom:'fungi', rarity:'rare', emoji:'✨' },
 ];
 
 // Non-native species the simulator may sometimes "find" (rare event)
@@ -1795,6 +1849,111 @@ function fertilise(plotId) {
 }
 
 $('#waterBtn').addEventListener('click', tendGarden);
+
+/* ============= LIMITED-TIME EVENTS ============= */
+// A reusable date-windowed event engine. Each event features a slice of
+// species and a find goal; completing it grants nectar, exclusive event
+// seeds for the Garden, and a badge. This is the pipeline the Phase 5 launch
+// Bioblitz (Autumn Fungi Foray) runs on. Windows use [month, day] and may
+// wrap the year end. Progress lives in state.events[id].
+const EVENTS = [
+  {
+    id: 'spring-bloom-2026',
+    name: 'Spring Bloom',
+    emoji: '🌸',
+    start: [9, 1], end: [11, 30],           // Sep–Nov: southern spring
+    colorA: '#6b8e5a', colorB: '#c9974a',
+    desc: 'Wildflowers are out across the country. Log native plants in bloom.',
+    goal: 8,
+    match: s => s.kingdom === 'plant',
+    reward: { nectar: 120, seedSpeciesId: 'p016', seedCount: 3, badge: { id: 'spring-herald', name: 'Spring Herald', icon: '🌸' } },
+  },
+  {
+    id: 'autumn-fungi-foray-2027',
+    name: 'Autumn Fungi Foray',
+    emoji: '🍄',
+    start: [3, 1], end: [5, 31],            // Mar–May: southern autumn, peak fungi
+    colorA: '#5d3f2c', colorB: '#a0522d',
+    desc: 'Fungi are fruiting. Log as many species as you can find on wood and leaf litter.',
+    goal: 8,
+    match: s => s.kingdom === 'fungi',
+    reward: { nectar: 120, seedSpeciesId: 'f016', seedCount: 3, badge: { id: 'foray-founder', name: 'Foray Founder', icon: '🍄' } },
+  },
+];
+
+function inWindow(ev, date = new Date()) {
+  const md = (date.getMonth() + 1) * 100 + date.getDate();
+  const s = ev.start[0] * 100 + ev.start[1];
+  const e = ev.end[0] * 100 + ev.end[1];
+  return s <= e ? (md >= s && md <= e) : (md >= s || md <= e); // handle year-wrap
+}
+
+function daysUntil(monthDay, from = new Date()) {
+  const [m, d] = monthDay;
+  let target = new Date(from.getFullYear(), m - 1, d);
+  if (target < from) target = new Date(from.getFullYear() + 1, m - 1, d);
+  return Math.ceil((target - from) / 86400000);
+}
+
+function activeEvent(date = new Date()) { return EVENTS.find(ev => inWindow(ev, date)) || null; }
+function upcomingEvent(from = new Date()) {
+  return EVENTS.filter(ev => !inWindow(ev, from))
+    .map(ev => ({ ev, days: daysUntil(ev.start, from) }))
+    .sort((a, b) => a.days - b.days)[0] || null;
+}
+
+function evaluateEvent(discovery) {
+  const ev = activeEvent();
+  if (!ev || !ev.match(discovery)) return;
+  if (!state.events) state.events = {};
+  const rec = state.events[ev.id] || { count: 0, done: false };
+  if (rec.done) return;
+  rec.count++;
+  if (rec.count >= ev.goal) {
+    rec.done = true;
+    ensureGarden();
+    state.garden.nectar += ev.reward.nectar;
+    state.seeds[ev.reward.seedSpeciesId] = (state.seeds[ev.reward.seedSpeciesId] || 0) + ev.reward.seedCount;
+    if (!state.eventBadges) state.eventBadges = [];
+    if (!state.eventBadges.includes(ev.reward.badge.id)) state.eventBadges.push(ev.reward.badge.id);
+    setTimeout(() => showToast(`${ev.emoji} ${ev.name} complete! Badge earned + ${ev.reward.seedCount} event seeds`, 3400), 1300);
+  }
+  state.events[ev.id] = rec;
+}
+
+function renderEventCard() {
+  const card = $('#eventCard');
+  if (!card) return;
+  const ev = activeEvent();
+  if (ev) {
+    const rec = (state.events && state.events[ev.id]) || { count: 0, done: false };
+    const pct = Math.min(100, Math.round((rec.count / ev.goal) * 100));
+    const daysLeft = daysUntil(ev.end);
+    const seedName = (speciesMeta(ev.reward.seedSpeciesId) || {}).name || 'a rare';
+    card.className = 'event-card' + (rec.done ? ' done' : '');
+    card.style.setProperty('--evt-a', ev.colorA);
+    card.style.setProperty('--evt-b', ev.colorB);
+    card.innerHTML = `
+      <div class="event-eyebrow">${ev.emoji} Limited-time event · ${daysLeft} day${daysLeft === 1 ? '' : 's'} left</div>
+      <div class="event-title">${ev.name}</div>
+      <div class="event-desc">${rec.done ? 'Complete! Your event seeds are waiting in the Garden.' : ev.desc}</div>
+      <div class="event-progress-track"><div class="event-progress-fill" style="width:${pct}%"></div></div>
+      <div class="event-meta"><span>${Math.min(rec.count, ev.goal)}/${ev.goal} logged</span><span>${rec.done ? '✅ ' + ev.reward.badge.name : '🏅 ' + ev.reward.badge.name}</span></div>
+      ${rec.done ? '' : `<div class="event-reward">Reward: ${ev.reward.nectar} nectar · ${ev.reward.seedCount}× ${seedName} seeds · exclusive badge</div>`}`;
+    return;
+  }
+  const up = upcomingEvent();
+  if (up) {
+    card.className = 'event-card upcoming';
+    card.style.removeProperty('--evt-a');
+    card.innerHTML = `
+      <div class="event-eyebrow" style="color:var(--ochre-deep)">${up.ev.emoji} Coming soon · in ${up.days} day${up.days === 1 ? '' : 's'}</div>
+      <div class="event-title">${up.ev.name}</div>
+      <div class="event-desc">${up.ev.desc}</div>`;
+  } else {
+    card.innerHTML = '';
+  }
+}
 
 /* ============= IN-SEASON BONUSES ============= */
 // Southern-hemisphere flowering/fruiting windows by species group. A find
@@ -2651,8 +2810,48 @@ function mapClaudeToSpecies(c) {
 /* ============= SUPABASE SYNC ============= */
 let sb = null;        // supabase client
 let sbUser = null;    // current user object
+let sbProfile = null; // {id, handle, friend_code} — social identity, null until created
 let syncing = false;
 const PHOTO_BUCKET = 'discovery-photos';
+
+/* ---- Hunter profiles (social slice 1) ----
+   A profile is opt-in social identity: a unique handle (the only
+   human-readable name shown anywhere) plus a friend code for later crew
+   joins and seed gifts. See docs/SOCIAL-DESIGN.md. */
+async function fetchProfile() {
+  if (!sb || !sbUser) { sbProfile = null; return null; }
+  try {
+    const { data, error } = await sb.from('profiles').select('*').eq('id', sbUser.id).maybeSingle();
+    if (!error) sbProfile = data || null;
+  } catch (e) { console.warn('Profile fetch failed:', e.message); }
+  return sbProfile;
+}
+
+function makeFriendCode() {
+  const words = ['WATTLE', 'BANKSIA', 'MALLEE', 'BUNYA', 'QUOLL', 'LYREBIRD', 'MULGA', 'CORELLA'];
+  const w = words[Math.floor(Math.random() * words.length)];
+  return `${w}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+}
+
+async function createProfile(handle) {
+  if (!/^[a-z0-9_]{3,20}$/.test(handle)) throw new Error('Handle must be 3–20 chars: a–z, 0–9, _');
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const { data, error } = await sb.from('profiles')
+      .insert({ id: sbUser.id, handle, friend_code: makeFriendCode() })
+      .select().single();
+    if (!error) { sbProfile = data; return data; }
+    if (error.code === '23505' && /friend_code/.test(error.message || '')) continue; // code collision — remint and retry
+    if (error.code === '23505') throw new Error('That name is taken — try another');
+    throw error;
+  }
+  throw new Error('Could not mint a friend code — try again');
+}
+
+async function removeSharedSightings() {
+  if (!sb || !sbUser) return;
+  const { error } = await sb.from('sightings').delete().eq('user_id', sbUser.id);
+  if (error) throw error;
+}
 
 /* ---- Photo storage ----
    Synced photos live in a Storage bucket; the discoveries.photo column only
@@ -2695,10 +2894,11 @@ function initSupabase() {
     sb.auth.getSession().then(({ data }) => {
       sbUser = data.session?.user || null;
       updateSyncPill();
-      if (sbUser) backgroundSync();
+      if (sbUser) { backgroundSync(); fetchProfile(); }
     });
     sb.auth.onAuthStateChange((event, session) => {
       sbUser = session?.user || null;
+      if (sbUser) fetchProfile(); else sbProfile = null;
       updateSyncPill();
     });
   } catch (e) {
@@ -2768,6 +2968,22 @@ async function syncPush(discovery) {
     };
     const { error } = await sb.from('discoveries').upsert(row);
     if (error) throw error;
+    // Opt-in social projection: species/rarity/suburb/time ONLY — never
+    // coordinates, photos, or anything else (docs/SOCIAL-DESIGN.md)
+    if (settings.shareFinds && sbProfile) {
+      const { error: sErr } = await sb.from('sightings').upsert({
+        id: discovery.id,
+        user_id: sbUser.id,
+        species_id: discovery.speciesId,
+        name: discovery.name,
+        kingdom: discovery.kingdom,
+        rarity: discovery.rarity,
+        suburb: discovery.suburb || null,
+        grove_key: null, // groves land in slice 2
+        found_at: new Date(discovery.ts).toISOString(),
+      });
+      if (sErr) console.warn('Sighting share failed:', sErr.message);
+    }
     return true;
   } catch (e) {
     console.error('Sync push failed:', e);
@@ -2786,6 +3002,9 @@ async function syncDelete(id) {
     // legacy base64-only rows simply have no object to remove.
     const { error: rmError } = await sb.storage.from(PHOTO_BUCKET).remove([photoStoragePath(id)]);
     if (rmError) console.warn('Photo cleanup failed (row already deleted):', rmError.message);
+    // The public sighting (if one was shared) goes with it
+    const { error: sgErr } = await sb.from('sightings').delete().eq('id', id);
+    if (sgErr) console.warn('Sighting cleanup failed:', sgErr.message);
     return true;
   } catch (e) {
     console.error('Sync delete failed:', e);
@@ -2891,7 +3110,60 @@ create policy "photos insert own" on storage.objects for insert
 create policy "photos update own" on storage.objects for update
   using (bucket_id = 'discovery-photos' and auth.uid()::text = (storage.foldername(name))[1]);
 create policy "photos delete own" on storage.objects for delete
-  using (bucket_id = 'discovery-photos' and auth.uid()::text = (storage.foldername(name))[1]);`;
+  using (bucket_id = 'discovery-photos' and auth.uid()::text = (storage.foldername(name))[1]);
+
+-- ===== Social layer, slice 1: profiles + shared sightings =====
+-- Handles are the only human-readable identity anywhere in the app.
+create table if not exists profiles (
+  id uuid primary key references auth.users default auth.uid(),
+  handle text unique not null check (handle ~ '^[a-z0-9_]{3,20}$'),
+  friend_code text unique not null,
+  created_at timestamptz default now()
+);
+
+alter table profiles enable row level security;
+drop policy if exists "profiles read" on profiles;
+drop policy if exists "profiles insert own" on profiles;
+drop policy if exists "profiles update own" on profiles;
+create policy "profiles read"       on profiles for select to authenticated using (true);
+create policy "profiles insert own" on profiles for insert with check (auth.uid() = id);
+create policy "profiles update own" on profiles for update using (auth.uid() = id);
+
+-- Privacy-safe public projection of finds: species, rarity, suburb, time.
+-- NO coordinates, NO photos, NO emails. The client writes here only when
+-- the player has turned "Share finds" on.
+create table if not exists sightings (
+  id text primary key,
+  user_id uuid references auth.users not null default auth.uid(),
+  species_id text,
+  name text not null,
+  kingdom text not null,
+  rarity text not null,
+  suburb text,
+  grove_key text,
+  found_at timestamptz not null
+);
+
+alter table sightings enable row level security;
+drop policy if exists "sightings read" on sightings;
+drop policy if exists "sightings insert own" on sightings;
+drop policy if exists "sightings delete own" on sightings;
+create policy "sightings read"       on sightings for select to authenticated using (true);
+create policy "sightings insert own" on sightings for insert with check (auth.uid() = user_id);
+create policy "sightings delete own" on sightings for delete using (auth.uid() = user_id);
+
+-- Suburb leaderboard. Score = DISTINCT SPECIES (biodiversity), never raw
+-- volume; finds counts at most one sighting per species per day.
+create or replace view suburb_leaderboard with (security_invoker = true) as
+  select s.suburb,
+         s.user_id,
+         p.handle,
+         count(distinct s.species_id) as species,
+         count(distinct (s.species_id, date(s.found_at))) as finds
+  from sightings s
+  join profiles p on p.id = s.user_id
+  where s.suburb is not null
+  group by s.suburb, s.user_id, p.handle;`;
 
 /* ============= SETTINGS MODAL ============= */
 function openSettings() {
@@ -2963,6 +3235,31 @@ function openSettings() {
             </div>
             <button class="btn secondary" id="syncNowBtn" style="width:auto; padding:8px 14px; font-size:12px;">Sync now</button>
           </div>
+
+          <div style="border-top:1px solid var(--line); margin-top:14px; padding-top:14px;">
+            ${sbProfile ? `
+              <div class="lbl" style="font-size:14px; font-weight:600;">🧑‍🌾 Hunter profile</div>
+              <div style="display:flex; align-items:center; gap:8px; margin-top:8px; flex-wrap:wrap;">
+                <span class="ai-pill" style="background:var(--plant-light); font-size:13px; padding:6px 12px;">@${sbProfile.handle}</span>
+                <span class="ai-pill" style="background:var(--sandstone); color:var(--ink); font-size:12px; padding:6px 12px;">${sbProfile.friend_code}</span>
+                <button class="copy-btn" id="copyCodeBtn" style="margin-top:0;">Copy code</button>
+              </div>
+              <div class="toggle-row">
+                <div>
+                  <div class="lbl">Share finds to leaderboards</div>
+                  <div class="desc">Only species, rarity, suburb and time are shared — never photos or coordinates</div>
+                </div>
+                <div class="switch ${settings.shareFinds ? 'on' : ''}" id="shareToggle"></div>
+              </div>
+              <button class="btn secondary" id="purgeSharedBtn" style="font-size:12px; padding:10px;">Remove all my shared sightings</button>
+            ` : `
+              <label for="handleInput">Choose a hunter name to join leaderboards</label>
+              <input type="text" id="handleInput" placeholder="bush_wanderer" autocomplete="off" maxlength="20" />
+              <div class="key-status warn">3–20 characters: a–z, 0–9, underscore. This is the only name other hunters ever see.</div>
+              <button class="btn" id="createProfileBtn" style="margin-top:8px;">Create profile</button>
+            `}
+          </div>
+
           <button class="btn" id="signOutBtn" style="margin-top:10px; background:#a55045;">Sign out</button>
         ` : `
           <label for="supaUrl">Supabase URL</label>
@@ -3117,6 +3414,45 @@ function openSettings() {
       showToast('Failed: ' + (e.message || 'wrong code?'));
     } finally {
       btn.disabled = false; btn.textContent = 'Verify & sign in';
+    }
+  });
+
+  // ===== Hunter profile =====
+  $('#createProfileBtn')?.addEventListener('click', async () => {
+    const handle = ($('#handleInput').value || '').trim().toLowerCase();
+    const btn = $('#createProfileBtn');
+    btn.disabled = true; btn.textContent = 'Creating...';
+    try {
+      await createProfile(handle);
+      settings.shareFinds = true; // creating a profile is the intent to compete
+      saveSettings();
+      openSettings(); // re-render with the profile card
+      showToast(`🧑‍🌾 Welcome, @${handle}!`);
+    } catch (e) {
+      showToast(e.message || 'Could not create profile', 3000);
+      btn.disabled = false; btn.textContent = 'Create profile';
+    }
+  });
+
+  $('#copyCodeBtn')?.addEventListener('click', () => {
+    navigator.clipboard.writeText(sbProfile.friend_code).then(() => showToast('Friend code copied'));
+  });
+
+  $('#shareToggle')?.addEventListener('click', () => {
+    const el = $('#shareToggle');
+    el.classList.toggle('on');
+    settings.shareFinds = el.classList.contains('on');
+    saveSettings();
+    showToast(settings.shareFinds ? 'Sharing on — new finds join the leaderboards' : 'Sharing off — new finds stay private');
+  });
+
+  $('#purgeSharedBtn')?.addEventListener('click', async () => {
+    if (!confirm('Remove every sighting you have shared to leaderboards? Your private collection is untouched.')) return;
+    try {
+      await removeSharedSightings();
+      showToast('Shared sightings removed');
+    } catch (e) {
+      showToast('Failed: ' + (e.message || 'unknown'));
     }
   });
 
@@ -3313,6 +3649,7 @@ function addDiscovery(species, photo, loc, suburb, isLocalLegend) {
   state.seeds[discovery.speciesId] = (state.seeds[discovery.speciesId] || 0) + 1; // every find yields a seed
   bumpStreak();
   evaluateQuests(discovery);
+  evaluateEvent(discovery);
   saveState();
   checkBadges();
   updateHeader();
@@ -3390,6 +3727,7 @@ function showUpgradeModal() {
 /* ============= DISCOVER — RECENT ============= */
 function renderRecent() {
   renderQuests();
+  renderEventCard();
   const grid = $('#recentGrid');
   const recent = state.discoveries.slice(-6).reverse();
   let html = '';
@@ -3719,14 +4057,61 @@ function renderProfile() {
     $('#upgradeBtn')?.addEventListener('click', showUpgradeModal);
   }
 
-  // Badges
+  renderLeaderboard(); // async — fills #leaderboard when data arrives
+
+  // Badges — standard + any earned event badges
+  const eventBadgeDefs = EVENTS.map(ev => ({ ...ev.reward.badge, desc: `${ev.name} event` }));
+  const earnedEventBadges = eventBadgeDefs.filter(b => (state.eventBadges || []).includes(b.id));
   $('#badgesGrid').innerHTML = BADGES.map(b => `
     <div class="badge ${state.badges.includes(b.id) ? '' : 'locked'}">
       <span class="b-icon">${b.icon}</span>
       <div class="b-name">${b.name}</div>
       <div class="b-desc">${b.desc}</div>
     </div>
+  `).join('') + earnedEventBadges.map(b => `
+    <div class="badge" style="border-color:var(--ochre)">
+      <span class="b-icon">${b.icon}</span>
+      <div class="b-name">${b.name}</div>
+      <div class="b-desc">${b.desc}</div>
+    </div>
   `).join('');
+}
+
+/* ============= LOCAL LEGENDS LEADERBOARD ============= */
+// Top hunters by DISTINCT SPECIES in the suburb of your most recent find.
+// Reads the suburb_leaderboard view (privacy-safe sightings only).
+async function renderLeaderboard() {
+  const el = $('#leaderboard');
+  if (!el) return;
+  if (!sb || !sbUser || !sbProfile || !settings.shareFinds) {
+    el.innerHTML = `<div class="lb-empty">Compete with your suburb: sign in, pick a hunter name, and turn on "Share finds" in ⚙️ settings. Only species · rarity · suburb · time are ever shared — never photos or locations.</div>`;
+    return;
+  }
+  const suburb = [...state.discoveries].sort((a, b) => b.ts - a.ts).map(d => d.suburb).find(Boolean);
+  if (!suburb) {
+    el.innerHTML = `<div class="lb-empty">Log a find with location on and your suburb's board appears here.</div>`;
+    return;
+  }
+  el.innerHTML = `<div class="lb-empty">Loading ${suburb}…</div>`;
+  try {
+    const { data, error } = await sb.from('suburb_leaderboard')
+      .select('*').eq('suburb', suburb)
+      .order('species', { ascending: false }).limit(10);
+    if (error) throw error;
+    if (!data || !data.length) {
+      el.innerHTML = `<div class="lb-empty">No shared finds in ${suburb} yet — you could be the first Local Legend here.</div>`;
+      return;
+    }
+    el.innerHTML = `<div class="lb-title">📍 ${suburb}</div>` + data.map((r, i) => `
+      <div class="lb-row ${r.user_id === sbUser.id ? 'me' : ''}">
+        <span class="lb-rank">${['🥇', '🥈', '🥉'][i] || i + 1}</span>
+        <span class="lb-handle">@${r.handle}</span>
+        <span class="lb-score">${r.species} species</span>
+      </div>`).join('');
+  } catch (e) {
+    console.warn('[PP] Leaderboard load failed:', e.message);
+    el.innerHTML = `<div class="lb-empty">Couldn't load the board — run the latest SQL from settings if you haven't, then try again.</div>`;
+  }
 }
 
 /* ============= MAP VIEW ============= */

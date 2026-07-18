@@ -54,19 +54,20 @@ hunts. Full design: [`docs/GARDEN-DESIGN.md`](docs/GARDEN-DESIGN.md).
 
 - [x] **The Dex** — every species a silhouette until found; completion %
 - [x] Daily quests + streaks
-- [ ] **The Garden v1** — every find yields a seed; plant it, tend it daily,
+- [x] **The Garden v1** — every find yields a seed; plant it, tend it daily,
       watch it grow through real-day stages scaled by rarity. Nectar economy,
       six starting plots, no plant death (untended plants pause, never die).
       Single-player and fully local — no backend required.
-- [ ] "In-season" bonuses — extra XP for a plant in flower or fungus fruiting
-- [ ] Share cards — story-sized find cards for socials
-- [ ] Rarity 2.0 — recalibrate tiers against Atlas of Living Australia data
-- [ ] Spring Bloom event — first limited-time challenge (garden-integrated:
-      event seeds as rewards)
+- [x] "In-season" bonuses — extra XP for a plant in flower or fungus fruiting
+- [x] Share cards — story-sized find cards for socials
+- [x] Rarity 2.0 — recalibrated against ALA occurrence data (`docs/RARITY.md`)
+- [x] Spring Bloom event — limited-time event engine (Autumn Fungi Foray
+      pre-configured as the launch event)
 
 ## Phase 3 — Grow (M5–M6): the social layer + places
 
 Other people are the endgame content — and now there are places to care about.
+Full architecture: [`docs/SOCIAL-DESIGN.md`](docs/SOCIAL-DESIGN.md).
 
 - [ ] Profiles + friend codes
 - [ ] **Groves v1** — real parks/reserves become Groves; the season's top
