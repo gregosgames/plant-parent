@@ -589,6 +589,87 @@
     backdrop-filter: blur(4px);
   }
 
+  /* ===================== GARDEN VIEW ===================== */
+  .garden-summary {
+    background: linear-gradient(135deg, var(--plant-deep), var(--plant-mid));
+    color: var(--bg-cream);
+    border-radius: 16px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .garden-nectar { font-size: 24px; font-weight: 800; line-height: 1.3; }
+  .water-btn {
+    background: var(--ochre);
+    color: var(--plant-deep);
+    border: none;
+    border-radius: 14px;
+    padding: 12px 18px;
+    font-size: 14px;
+    font-weight: 700;
+    font-family: inherit;
+    line-height: 1.25;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    transition: transform 0.1s, opacity 0.2s;
+  }
+  .water-btn:active { transform: scale(0.96); }
+  .water-btn:disabled { opacity: 0.55; cursor: default; }
+  .garden-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+  .plot {
+    aspect-ratio: 0.9;
+    background: var(--bg-cream);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    cursor: pointer;
+    padding: 6px;
+    text-align: center;
+    transition: transform 0.12s;
+  }
+  .plot:active { transform: scale(0.95); }
+  .plot .p-emoji { line-height: 1.1; }
+  .plot .p-name {
+    font-size: 10px; font-weight: 600; color: var(--ink);
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .plot .p-stage { font-size: 9px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); font-weight: 700; }
+  .plot.flowering {
+    border-color: var(--ochre);
+    box-shadow: 0 0 10px rgba(201,151,74,0.35);
+  }
+  .plot.empty {
+    border: 2px dashed var(--sandstone);
+    background: transparent;
+    color: var(--muted);
+  }
+  .plot.empty .p-emoji { opacity: 0.7; }
+  .plot.buy { border: 2px dashed var(--ochre); color: var(--ochre-deep); background: rgba(201,151,74,0.06); }
+  .seed-row {
+    display: flex; align-items: center; gap: 10px;
+    width: 100%;
+    background: var(--bg-cream);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 14px;
+    text-align: left;
+  }
+  .seed-row:active { transform: scale(0.98); }
+  .seed-row .s-emoji { font-size: 22px; }
+  .seed-row .s-name { flex: 1; font-weight: 600; }
+  .seed-row .s-count { font-size: 12px; color: var(--ink-soft); font-weight: 700; }
+
   /* ===================== QUESTS & STREAK ===================== */
   .quest-card {
     background: var(--bg-cream);
@@ -1083,9 +1164,30 @@
     <div class="recent-grid" id="recentGrid"></div>
   </section>
 
-  <!-- ============= COLLECTION VIEW ============= -->
-  <section class="view" id="view-collection">
-    <div class="tabs">
+  <!-- ============= GARDEN VIEW ============= -->
+  <section class="view" id="view-garden">
+    <div class="garden-summary">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <div class="dex-lbl">Your native garden</div>
+          <div class="garden-nectar">🍯 <span id="nectarCount">0</span> nectar</div>
+        </div>
+        <button class="water-btn" id="waterBtn">💧 Water<br/>the garden</button>
+      </div>
+    </div>
+    <div class="garden-grid" id="gardenPlots"></div>
+    <p class="field-note" style="margin-top:16px;">Every find in the field gives you a seed. Growth happens on days you water — untended plants pause, they never die. 🌱</p>
+  </section>
+
+  <!-- ============= BOTANICA (Collection + Dex) ============= -->
+  <section class="view" id="view-botanica">
+    <div class="tabs" id="botanicaMode">
+      <button class="tab active" data-mode="collection">📔 Collection</button>
+      <button class="tab" data-mode="dex">📖 Dex</button>
+    </div>
+
+    <div id="botanica-collection">
+    <div class="tabs" id="collectionTabs">
       <button class="tab active" data-kingdom="all">All</button>
       <button class="tab" data-kingdom="plant">🌿 Herbarium</button>
       <button class="tab" data-kingdom="fungi">🍄 Mycarium</button>
@@ -1107,10 +1209,10 @@
     </div>
 
     <div class="collection-grid" id="collectionGrid"></div>
-  </section>
+    </div><!-- /botanica-collection -->
 
-  <!-- ============= DEX VIEW ============= -->
-  <section class="view" id="view-dex">
+    <!-- Dex mode -->
+    <div id="botanica-dex" style="display:none">
     <div class="dex-summary">
       <div style="display:flex; justify-content:space-between; align-items:baseline;">
         <div>
@@ -1133,6 +1235,7 @@
     </div>
 
     <div id="dexGrid"></div>
+    </div><!-- /botanica-dex -->
   </section>
 
   <!-- ============= MAP VIEW ============= -->
@@ -1172,8 +1275,8 @@
   <!-- ============= BOTTOM NAV ============= -->
   <nav class="bottom-nav">
     <button class="nav-btn active" data-view="discover"><span class="icon">📸</span><span>Discover</span></button>
-    <button class="nav-btn" data-view="collection"><span class="icon">📔</span><span>Collection</span></button>
-    <button class="nav-btn" data-view="dex"><span class="icon">📖</span><span>Dex</span></button>
+    <button class="nav-btn" data-view="garden"><span class="icon">🌱</span><span>Garden</span></button>
+    <button class="nav-btn" data-view="botanica"><span class="icon">📔</span><span>Botanica</span></button>
     <button class="nav-btn" data-view="map"><span class="icon">🗺️</span><span>Map</span></button>
     <button class="nav-btn" data-view="profile"><span class="icon">👤</span><span>Profile</span></button>
   </nav>
@@ -1425,7 +1528,7 @@ function getStats() {
   const fungi  = state.discoveries.filter(d => d.kingdom === 'fungi').length;
   const rareCount      = state.discoveries.filter(d => d.rarity === 'rare').length;
   const legendaryCount = state.discoveries.filter(d => d.rarity === 'legendary').length;
-  const xp    = state.discoveries.reduce((sum, d) => sum + (RARITY[d.rarity]?.xp || 0), 0)
+  const xp    = state.discoveries.reduce((sum, d) => sum + (RARITY[d.rarity]?.xp || 0) + (d.seasonBonus || 0), 0)
               + (state.bonusXP || 0); // quest rewards
   const localLegends = state.discoveries.filter(d => d.isLocalLegend).length;
   return { plants, fungi, rareCount, legendaryCount, xp, total: state.discoveries.length, localLegends, streak: currentStreak() };
@@ -1459,6 +1562,262 @@ function pickSpecies() {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
+/* ============= THE GARDEN (Grow verb) ============= */
+// Full design: docs/GARDEN-DESIGN.md. Every find yields a seed; plant it in
+// a plot and tend the garden once a day. Growth stages take real tended days
+// scaled by rarity. Untended plants pause — nothing ever dies. All local,
+// no backend; day math shares dayKey() with quests and streaks.
+const STAGE_NAMES = ['Seed', 'Sprout', 'Juvenile', 'Mature', 'Flowering'];
+const STAGE_DAYS = { common: 1, uncommon: 2, rare: 4, legendary: 7 };   // tended days per stage
+const PLANT_NECTAR = { common: 5, uncommon: 10, rare: 25, legendary: 60 };
+const PLOT_COSTS = { 6: 50, 7: 75, 8: 100, 9: 150, 10: 200, 11: 300 }; // cost of the NEXT plot, keyed by current capacity
+const MAX_FREE_PLOTS = 12;
+const FERTILISER_COST = 30;
+const TEND_CAP = 15;
+
+function ensureGarden() {
+  if (!state.garden) state.garden = { nectar: 0, lastTend: null, plots: [], plotCapacity: 6 };
+  if (!state.seeds) state.seeds = {};
+}
+
+function speciesMeta(speciesId) {
+  const s = SPECIES.find(x => x.id === speciesId);
+  if (s) return s;
+  // Wild seed: ad-hoc iNat/Claude species — metadata lives on the discovery
+  const d = state.discoveries.find(x => x.speciesId === speciesId);
+  return d ? { id: speciesId, name: d.name, sci: d.sci, kingdom: d.kingdom, rarity: d.rarity || 'uncommon', emoji: d.emoji || (d.kingdom === 'fungi' ? '🍄' : '🌿') } : null;
+}
+
+function tendGarden() {
+  ensureGarden();
+  const today = dayKey();
+  if (state.garden.lastTend === today) return showToast('Already watered today 💧');
+  state.garden.lastTend = today;
+
+  let earned = 5; // base tend reward
+  const stageUps = [];
+  for (const p of state.garden.plots) {
+    if (p.stage >= 4) { earned += 1; continue; } // flowering plants yield daily nectar
+    p.daysTendedThisStage++;
+    if (p.daysTendedThisStage >= STAGE_DAYS[p.rarity]) {
+      p.stage++;
+      p.daysTendedThisStage = 0;
+      state.garden.nectar += 5; // stage-up bonus
+      if (p.stage === 4 && !p.everFlowered) {
+        p.everFlowered = true;
+        state.garden.nectar += 25; // first flowering of this specimen
+        stageUps.push(`🌸 ${p.name} is flowering!`);
+      } else {
+        stageUps.push(`🌱 ${p.name} → ${STAGE_NAMES[p.stage]}`);
+      }
+    }
+  }
+  earned = Math.min(earned, TEND_CAP);
+  state.garden.nectar += earned;
+  saveState();
+  renderGarden();
+  showToast(`💧 Garden watered · +${earned} nectar`);
+  stageUps.forEach((msg, i) => setTimeout(() => showToast(msg, 2600), 900 + i * 900));
+}
+
+function plotStageVisual(p) {
+  if (p.stage === 0) return { emoji: '🌰', size: 22 };
+  if (p.stage === 1) return { emoji: '🌱', size: 26 };
+  const size = [0, 0, 24, 32, 38][p.stage];
+  return { emoji: p.emoji, size };
+}
+
+function renderGarden() {
+  ensureGarden();
+  $('#nectarCount').textContent = state.garden.nectar;
+  const waterBtn = $('#waterBtn');
+  const watered = state.garden.lastTend === dayKey();
+  waterBtn.disabled = watered;
+  waterBtn.innerHTML = watered ? 'Watered today ✓' : '💧 Water<br/>the garden';
+
+  const g = state.garden;
+  let html = g.plots.map(p => {
+    const v = plotStageVisual(p);
+    return `<div class="plot ${p.stage >= 4 ? 'flowering' : ''}" data-plot="${p.id}">
+      <span class="p-emoji" style="font-size:${v.size}px">${v.emoji}</span>
+      <div class="p-name">${p.name}</div>
+      <div class="p-stage">${STAGE_NAMES[p.stage]}${p.stage >= 4 ? ' ✨' : ''}</div>
+    </div>`;
+  }).join('');
+
+  for (let i = g.plots.length; i < g.plotCapacity; i++) {
+    html += `<div class="plot empty" data-empty="1">
+      <span class="p-emoji" style="font-size:22px">🕳️</span>
+      <div class="p-stage">Plant a seed</div>
+    </div>`;
+  }
+  if (g.plotCapacity < MAX_FREE_PLOTS) {
+    html += `<div class="plot buy" data-buy="1">
+      <span class="p-emoji" style="font-size:20px">➕</span>
+      <div class="p-stage">New plot</div>
+      <div class="p-name" style="color:var(--ochre-deep)">🍯 ${PLOT_COSTS[g.plotCapacity]}</div>
+    </div>`;
+  }
+  $('#gardenPlots').innerHTML = html;
+
+  $$('#gardenPlots .plot[data-plot]').forEach(el => el.addEventListener('click', () => openPlot(el.dataset.plot)));
+  $$('#gardenPlots .plot[data-empty]').forEach(el => el.addEventListener('click', openSeedPicker));
+  $$('#gardenPlots .plot[data-buy]').forEach(el => el.addEventListener('click', buyPlot));
+}
+
+function buyPlot() {
+  ensureGarden();
+  const cost = PLOT_COSTS[state.garden.plotCapacity];
+  if (cost === undefined) return;
+  if (state.garden.nectar < cost) return showToast(`Need 🍯 ${cost} nectar for a new plot`);
+  state.garden.nectar -= cost;
+  state.garden.plotCapacity++;
+  saveState();
+  renderGarden();
+  showToast('🕳️ New plot dug!');
+}
+
+function openSeedPicker() {
+  ensureGarden();
+  const owned = Object.entries(state.seeds).filter(([, n]) => n > 0);
+  if (!owned.length) {
+    return openModal(`
+      <h2>🌰 No seeds yet</h2>
+      <p class="lead">Every find in the field gives you a seed of that species.</p>
+      <button class="btn" onclick="closeModal(); switchView('discover')">Go hunting</button>
+      <button class="btn secondary" onclick="closeModal()" style="margin-top:8px">Close</button>
+    `);
+  }
+  const rarityRank = { legendary: 0, rare: 1, uncommon: 2, common: 3 };
+  const rows = owned
+    .map(([sid, n]) => ({ meta: speciesMeta(sid), n, sid }))
+    .filter(x => x.meta)
+    .sort((a, b) => (rarityRank[a.meta.rarity] - rarityRank[b.meta.rarity]) || a.meta.name.localeCompare(b.meta.name))
+    .map(x => `<button class="seed-row" data-seed="${x.sid}">
+      <span class="s-emoji">${x.meta.emoji}</span>
+      <span class="s-name">${x.meta.name}<br/><span class="rarity-tag rarity-${x.meta.rarity}" style="font-size:9px; padding:1px 7px; border-radius:999px;">${RARITY[x.meta.rarity].label}</span></span>
+      <span class="s-count">×${x.n}</span>
+    </button>`).join('');
+  openModal(`
+    <h2>🌰 Choose a seed</h2>
+    <p class="lead">Planting earns nectar by rarity. Rarer seeds take longer to grow.</p>
+    ${rows}
+    <button class="btn secondary" onclick="closeModal()" style="margin-top:8px">Cancel</button>
+  `);
+  $$('#modalBody .seed-row').forEach(el => el.addEventListener('click', () => plantSeed(el.dataset.seed)));
+}
+
+function plantSeed(speciesId) {
+  ensureGarden();
+  if (state.garden.plots.length >= state.garden.plotCapacity) return showToast('No free plots');
+  if (!(state.seeds[speciesId] > 0)) return;
+  const meta = speciesMeta(speciesId);
+  if (!meta) return;
+  state.seeds[speciesId]--;
+  state.garden.plots.push({
+    id: uid(),
+    speciesId,
+    name: meta.name,
+    emoji: meta.emoji,
+    rarity: meta.rarity,
+    kingdom: meta.kingdom,
+    stage: 0,
+    daysTendedThisStage: 0,
+    everFlowered: false,
+    plantedDay: dayKey(),
+  });
+  state.garden.nectar += PLANT_NECTAR[meta.rarity] || 10;
+  saveState();
+  closeModal();
+  renderGarden();
+  showToast(`🌰 ${meta.name} planted · +${PLANT_NECTAR[meta.rarity] || 10} nectar`);
+}
+
+function openPlot(plotId) {
+  ensureGarden();
+  const p = state.garden.plots.find(x => x.id === plotId);
+  if (!p) return;
+  const meta = speciesMeta(p.speciesId) || p;
+  const need = STAGE_DAYS[p.rarity];
+  const grown = p.stage >= 4;
+  const latestFind = state.discoveries.filter(d => d.speciesId === p.speciesId).sort((a, b) => b.ts - a.ts)[0];
+  const v = plotStageVisual(p);
+  openModal(`
+    ${p.kingdom === 'fungi' ? `
+      <div class="fungus-warning">
+        <span class="warn-icon">⚠️</span>
+        <div><b>Never eat wild fungi based on app identification alone.</b> This app is for observation and collection only.</div>
+      </div>` : ''}
+    <h2><span style="font-size:${Math.max(v.size, 24)}px">${v.emoji}</span> ${p.name}</h2>
+    <p class="lead" style="font-style:italic">${meta.sci || ''}</p>
+    <div class="result-meta">
+      <div class="meta-item"><div class="meta-lbl">Stage</div><div class="meta-val">${STAGE_NAMES[p.stage]}${grown ? ' ✨' : ''}</div></div>
+      <div class="meta-item"><div class="meta-lbl">Rarity</div><div class="meta-val">${RARITY[p.rarity].label}</div></div>
+      ${grown
+        ? `<div class="meta-item" style="grid-column:1/-1"><div class="meta-lbl">Yield</div><div class="meta-val">+1 nectar every watered day</div></div>`
+        : `<div class="meta-item" style="grid-column:1/-1"><div class="meta-lbl">Progress to ${STAGE_NAMES[p.stage + 1]}</div><div class="meta-val">${p.daysTendedThisStage}/${need} watered days</div></div>`}
+    </div>
+    ${grown ? '' : `<button class="btn" id="fertBtn" style="margin-top:14px" ${state.garden.nectar < FERTILISER_COST ? 'disabled' : ''}>🍯 Fertilise — count an extra day (${FERTILISER_COST} nectar)</button>`}
+    ${latestFind ? `<button class="btn secondary" id="plotFindBtn" style="margin-top:8px">📸 View your find</button>` : ''}
+    <button class="btn secondary" onclick="closeModal()" style="margin-top:8px">Close</button>
+    <button class="btn" id="plotRemoveBtn" style="margin-top:8px; background:#a55045;">Remove plant</button>
+  `);
+  $('#fertBtn')?.addEventListener('click', () => fertilise(p.id));
+  $('#plotFindBtn')?.addEventListener('click', () => showDetail(latestFind.id));
+  $('#plotRemoveBtn')?.addEventListener('click', () => {
+    if (!confirm(`Remove ${p.name} from this plot? The seed is not refunded.`)) return;
+    state.garden.plots = state.garden.plots.filter(x => x.id !== p.id);
+    saveState();
+    closeModal();
+    renderGarden();
+    showToast('Plot cleared');
+  });
+}
+
+function fertilise(plotId) {
+  ensureGarden();
+  const p = state.garden.plots.find(x => x.id === plotId);
+  if (!p || p.stage >= 4 || state.garden.nectar < FERTILISER_COST) return;
+  state.garden.nectar -= FERTILISER_COST;
+  p.daysTendedThisStage++;
+  let msg = `🍯 Fertilised ${p.name}`;
+  if (p.daysTendedThisStage >= STAGE_DAYS[p.rarity]) {
+    p.stage++;
+    p.daysTendedThisStage = 0;
+    state.garden.nectar += 5;
+    if (p.stage === 4 && !p.everFlowered) { p.everFlowered = true; state.garden.nectar += 25; }
+    msg = p.stage >= 4 ? `🌸 ${p.name} is flowering!` : `🌱 ${p.name} → ${STAGE_NAMES[p.stage]}`;
+  }
+  saveState();
+  closeModal();
+  renderGarden();
+  showToast(msg, 2600);
+}
+
+$('#waterBtn').addEventListener('click', tendGarden);
+
+/* ============= IN-SEASON BONUSES ============= */
+// Southern-hemisphere flowering/fruiting windows by species group. A find
+// made while its group is "in season" earns +50% XP — the shiny mechanic,
+// botanically true. First matching window wins, so specific groups sit
+// above the plant catch-all.
+const SEASON_WINDOWS = [
+  { label: 'Fungi fruiting season',    months: [3, 4, 5, 6],       match: s => s.kingdom === 'fungi' },
+  { label: 'Wattle season',            months: [7, 8, 9],          match: s => /^Acacia\s/.test(s.sci || '') },
+  { label: 'Banksia season',           months: [4, 5, 6, 7, 8, 9], match: s => /^(Banksia|Hakea|Grevillea)\s/.test(s.sci || '') },
+  { label: 'Orchid season',            months: [9, 10, 11],        match: s => /^(Caladenia|Pterostylis|Diuris|Thelymitra)\s/.test(s.sci || '') },
+  { label: 'Eucalypt blossom season',  months: [11, 12, 1, 2],     match: s => /^(Eucalyptus|Corymbia|Angophora)\s/.test(s.sci || '') },
+  { label: 'Spring wildflower season', months: [9, 10, 11],        match: s => s.kingdom === 'plant' },
+];
+
+function seasonInfo(species, date = new Date()) {
+  const m = date.getMonth() + 1;
+  for (const w of SEASON_WINDOWS) {
+    if (w.match(species)) return { inSeason: w.months.includes(m), label: w.label };
+  }
+  return { inSeason: false, label: null };
+}
+
 /* ============= DAILY QUESTS & STREAK ============= */
 // Two quests rotate daily, picked deterministically from the pool by the
 // date — no server needed, and everyone in the world gets the same pair.
@@ -1473,6 +1832,7 @@ const QUESTS = [
   { id: 'find-gum',     icon: '🌳', desc: 'Find a eucalypt or wattle',                xp: 20, check: (d) => /^(Eucalyptus|Corymbia|Angophora|Acacia)\s/.test(d.sci || '') },
   { id: 'find-protea',  icon: '🌼', desc: 'Find a banksia, grevillea or hakea',       xp: 20, check: (d) => /^(Banksia|Grevillea|Hakea|Telopea)\s/.test(d.sci || '') },
   { id: 'local-first',  icon: '🏆', desc: 'Be first in an area to find a species',    xp: 30, check: (d) => !!d.isLocalLegend },
+  { id: 'find-season',  icon: '🌸', desc: 'Find something in season',                 xp: 25, check: (d) => (d.seasonBonus || 0) > 0 },
 ];
 
 function dayKey(date = new Date()) {
@@ -1529,6 +1889,8 @@ function evaluateQuests(discovery) {
     if (passed) {
       state.quests.completed[q.id] = true;
       state.bonusXP = (state.bonusXP || 0) + q.xp;
+      ensureGarden();
+      state.garden.nectar += 10; // nectar rider on every quest
       completedNow.push(q);
     }
   }
@@ -1696,8 +2058,8 @@ function switchView(view) {
   $$('.nav-btn').forEach(n => n.classList.remove('active'));
   $('#view-' + view).classList.add('active');
   $$(`.nav-btn[data-view="${view}"]`).forEach(n => n.classList.add('active'));
-  if (view === 'collection') renderCollection();
-  if (view === 'dex') renderDex();
+  if (view === 'botanica') renderBotanica();
+  if (view === 'garden') renderGarden();
   if (view === 'profile') renderProfile();
   if (view === 'map') setTimeout(initOrUpdateMap, 50);
   if (view === 'discover') renderRecent();
@@ -1717,7 +2079,7 @@ $$('#dexTabs .tab').forEach(tab => {
     $$('#dexTabs .tab').forEach(t => t.classList.remove('active'));
     tab.classList.add('active');
     dexKingdom = tab.dataset.kingdom;
-    $('#view-dex').classList.toggle('fungi-theme', dexKingdom === 'fungi');
+    $('#botanica-dex').classList.toggle('fungi-theme', dexKingdom === 'fungi');
     renderDex();
   });
 });
@@ -2471,7 +2833,7 @@ async function backgroundSync() {
     state.discoveries = [...merged, ...localUnpushed];
     saveState();
     renderRecent();
-    if ($('#view-collection').classList.contains('active')) renderCollection();
+    if ($('#view-botanica').classList.contains('active')) renderBotanica();
   } catch (e) {
     console.error('Background sync failed:', e);
     showToast('☁️ Sync error: ' + (e.message || 'unknown'));
@@ -2858,7 +3220,8 @@ function showResult(species, photo, loc, suburb) {
     </div>
 
     <div class="xp-burst">
-      +${xp} XP
+      +${xp + (seasonInfo(species).inSeason ? Math.round(xp * 0.5) : 0)} XP
+      ${seasonInfo(species).inSeason ? `<div class="lg-tag">🌸 ${seasonInfo(species).label} — in-season bonus +${Math.round(xp * 0.5)} XP</div>` : ''}
       ${isLocalLegend ? '<div class="lg-tag">🏆 Local Legend — first in your suburb!</div>' : ''}
     </div>
 
@@ -2916,7 +3279,7 @@ function showResult(species, photo, loc, suburb) {
       btn.textContent = 'Added ✓';
       addDiscovery(species, photo, loc, suburb, isLocalLegend);
       closeModal();
-      showToast(`+${xp} XP — added to ${isFungi ? 'Mycarium' : 'Herbarium'}`);
+      showToast(`+${xp} XP · added to ${isFungi ? 'Mycarium' : 'Herbarium'} · 🌰 seed collected`, 2800);
     }, { once: true });        // belt-and-braces: listener auto-removes after first fire
   }
   saveState();
@@ -2927,6 +3290,7 @@ function addDiscovery(species, photo, loc, suburb, isLocalLegend) {
   // Sensitive species only ever get generalised coordinates on the record
   const sensitive = isSensitiveRarity(species.rarity);
   const storedLoc = loc && sensitive ? fuzzLocation(loc) : loc;
+  const season = seasonInfo(species);
   const discovery = {
     id: uid(),
     speciesId: species.id,
@@ -2940,10 +3304,13 @@ function addDiscovery(species, photo, loc, suburb, isLocalLegend) {
     lng: storedLoc?.lng,
     suburb,
     locationFuzzed: !!(loc && sensitive),
+    seasonBonus: season.inSeason ? Math.round((RARITY[species.rarity]?.xp || 0) * 0.5) : 0,
     isLocalLegend,
     ts: Date.now(),
   };
   state.discoveries.push(discovery);
+  ensureGarden();
+  state.seeds[discovery.speciesId] = (state.seeds[discovery.speciesId] || 0) + 1; // every find yields a seed
   bumpStreak();
   evaluateQuests(discovery);
   saveState();
@@ -3042,14 +3409,31 @@ function renderRecent() {
   });
 }
 
+/* ============= BOTANICA (Collection + Dex) ============= */
+let botanicaMode = 'collection';
+$$('#botanicaMode .tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    $$('#botanicaMode .tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    botanicaMode = tab.dataset.mode;
+    renderBotanica();
+  });
+});
+
+function renderBotanica() {
+  $('#botanica-collection').style.display = botanicaMode === 'collection' ? '' : 'none';
+  $('#botanica-dex').style.display = botanicaMode === 'dex' ? '' : 'none';
+  if (botanicaMode === 'collection') renderCollection(); else renderDex();
+}
+
 /* ============= COLLECTION VIEW ============= */
 let activeKingdom = 'all';
-$$('.tabs .tab').forEach(tab => {
+$$('#collectionTabs .tab').forEach(tab => {
   tab.addEventListener('click', () => {
-    $$('.tabs .tab').forEach(t => t.classList.remove('active'));
+    $$('#collectionTabs .tab').forEach(t => t.classList.remove('active'));
     tab.classList.add('active');
     activeKingdom = tab.dataset.kingdom;
-    $('#view-collection').classList.toggle('fungi-theme', activeKingdom === 'fungi');
+    $('#botanica-collection').classList.toggle('fungi-theme', activeKingdom === 'fungi');
     renderCollection();
   });
 });
@@ -3131,9 +3515,149 @@ function showDetail(id) {
       <div class="meta-item" style="grid-column:1/-1"><div class="meta-lbl">Location</div><div class="meta-val">${d.lat ? `${d.lat.toFixed(d.locationFuzzed ? 2 : 4)}, ${d.lng.toFixed(d.locationFuzzed ? 2 : 4)}` : 'Unknown'}${d.suburb ? ` · ${d.suburb}` : ''}${d.locationFuzzed ? '<div style="font-size:11px; color:var(--muted); margin-top:4px;">📍 Generalised to ~1km to protect this species</div>' : ''}</div></div>
     </div>
     ${d.isLocalLegend ? '<div class="xp-burst" style="margin-top:14px;">🏆 Local Legend find</div>' : ''}
-    <button class="btn secondary" onclick="closeModal()" style="margin-top:14px">Close</button>
+    <button class="btn" id="shareCardBtn" style="margin-top:14px">🪪 Share card</button>
+    <button class="btn secondary" onclick="closeModal()" style="margin-top:8px">Close</button>
     <button class="btn" style="margin-top:8px; background:#a55045;" onclick="deleteDiscovery('${d.id}')">Remove from collection</button>
   `);
+  $('#shareCardBtn')?.addEventListener('click', () => shareDiscovery(d.id));
+}
+
+/* ============= SHARE CARDS ============= */
+// A 1080×1920 story-sized card drawn on canvas: the find's photo, species,
+// rarity, and suburb in the app's earthy palette. Shared via the Web Share
+// API where available, otherwise downloaded as a PNG. Fully client-side.
+const CARD_RARITY_COLORS = { common: '#8fa978', uncommon: '#4a8f5d', rare: '#c9974a', legendary: '#b85c38' };
+
+function cardRoundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function loadCardImage(src) {
+  return new Promise((resolve) => {
+    if (!src) return resolve(null);
+    const img = new Image();
+    if (!src.startsWith('data:')) img.crossOrigin = 'anonymous'; // Storage URLs need CORS-clean pixels
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+}
+
+async function generateShareCard(d) {
+  const W = 1080, H = 1920;
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  const isFungi = d.kingdom === 'fungi';
+
+  // Background gradient in kingdom colours
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, isFungi ? '#3d2817' : '#2d4a2b');
+  grad.addColorStop(1, isFungi ? '#5d3f2c' : '#4a6741');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  // Header
+  ctx.fillStyle = '#c9974a';
+  ctx.font = '700 44px -apple-system, system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('P L A N T   P A R E N T', W / 2, 130);
+  ctx.fillStyle = 'rgba(245,240,230,0.75)';
+  ctx.font = '400 34px -apple-system, system-ui, sans-serif';
+  ctx.fillText('Wild find · Australian natives', W / 2, 190);
+
+  // Photo (cover-cropped into a rounded square) or emoji fallback
+  const px = 100, py = 260, ps = 880, radius = 48;
+  const img = await loadCardImage(d.photo);
+  cardRoundRect(ctx, px, py, ps, ps, radius);
+  if (img) {
+    ctx.save();
+    ctx.clip();
+    const scale = Math.max(ps / img.width, ps / img.height);
+    const dw = img.width * scale, dh = img.height * scale;
+    try {
+      ctx.drawImage(img, px + (ps - dw) / 2, py + (ps - dh) / 2, dw, dh);
+    } catch (e) { /* tainted or broken image — plain panel below */ }
+    ctx.restore();
+  } else {
+    ctx.fillStyle = 'rgba(245,240,230,0.12)';
+    ctx.fill();
+    ctx.font = '400 300px -apple-system, system-ui, sans-serif';
+    ctx.fillText(d.emoji || (isFungi ? '🍄' : '🌿'), W / 2, py + ps / 2 + 100);
+  }
+
+  // Species name (shrink to fit), scientific name
+  ctx.fillStyle = '#f5f0e6';
+  let nameSize = 84;
+  ctx.font = `800 ${nameSize}px -apple-system, system-ui, sans-serif`;
+  while (ctx.measureText(d.name).width > W - 160 && nameSize > 44) {
+    nameSize -= 4;
+    ctx.font = `800 ${nameSize}px -apple-system, system-ui, sans-serif`;
+  }
+  ctx.fillText(d.name, W / 2, 1290);
+  ctx.fillStyle = 'rgba(245,240,230,0.8)';
+  ctx.font = 'italic 400 46px Georgia, serif';
+  ctx.fillText(d.sci || '', W / 2, 1360);
+
+  // Rarity pill
+  const rLabel = (RARITY[d.rarity]?.label || d.rarity || '').toUpperCase();
+  ctx.font = '700 40px -apple-system, system-ui, sans-serif';
+  const pw = ctx.measureText(rLabel).width + 90;
+  ctx.fillStyle = CARD_RARITY_COLORS[d.rarity] || '#8fa978';
+  cardRoundRect(ctx, (W - pw) / 2, 1420, pw, 84, 42);
+  ctx.fill();
+  ctx.fillStyle = d.rarity === 'rare' ? '#2a2520' : '#ffffff';
+  ctx.fillText(rLabel, W / 2, 1477);
+
+  // Meta: kingdom · suburb · date
+  ctx.fillStyle = 'rgba(245,240,230,0.85)';
+  ctx.font = '400 40px -apple-system, system-ui, sans-serif';
+  const meta = [isFungi ? '🍄 Fungi' : '🌿 Plant', d.suburb, new Date(d.ts).toLocaleDateString()].filter(Boolean).join('   ·   ');
+  ctx.fillText(meta, W / 2, 1600);
+  if (d.isLocalLegend) {
+    ctx.fillStyle = '#c9974a';
+    ctx.font = '700 40px -apple-system, system-ui, sans-serif';
+    ctx.fillText('🏆 LOCAL LEGEND — FIRST IN THE AREA', W / 2, 1680);
+  }
+
+  // Footer
+  ctx.fillStyle = 'rgba(245,240,230,0.6)';
+  ctx.font = '400 36px -apple-system, system-ui, sans-serif';
+  ctx.fillText('A treasure hunt for Australian native plants & fungi', W / 2, 1820);
+
+  return new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+}
+
+async function shareDiscovery(id) {
+  const d = state.discoveries.find(x => x.id === id);
+  if (!d) return;
+  showToast('🪪 Making your card…');
+  try {
+    const blob = await generateShareCard(d);
+    if (!blob) throw new Error('card render failed');
+    const file = new File([blob], 'plant-parent-find.png', { type: 'image/png' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: `I found ${d.name}!`, text: `${d.name} (${d.sci}) — found with Plant Parent 🌿` });
+    } else {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `plant-parent-${(d.name || 'find').toLowerCase().replace(/[^a-z0-9]+/g, '-')}.png`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      showToast('Card saved — share it anywhere 🌿', 2600);
+    }
+  } catch (e) {
+    if (e.name !== 'AbortError') { // user cancelling the share sheet isn't an error
+      console.error('[PP] Share card failed:', e);
+      showToast('Could not create the card');
+    }
+  }
 }
 
 function deleteDiscovery(id) {
@@ -3143,7 +3667,7 @@ function deleteDiscovery(id) {
   closeModal();
   renderCollection();
   renderRecent();
-  if ($('#view-dex').classList.contains('active')) renderDex(); // detail modal can be opened from the Dex
+  if ($('#view-botanica').classList.contains('active')) renderBotanica(); // detail modal can be opened from the Dex
   updateHeader();
   showToast('Removed from collection');
   // Fire-and-forget cloud delete if signed in
