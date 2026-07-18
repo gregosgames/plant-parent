@@ -1,0 +1,420 @@
+{
+  "thresholds": {
+    "plant": {
+      "common": 10000,
+      "uncommon": 2500,
+      "rare": 250,
+      "legendary": 0
+    },
+    "fungi": {
+      "common": 6000,
+      "uncommon": 2000,
+      "rare": 250,
+      "legendary": 0
+    }
+  },
+  "overrides": {
+    "p029": "Wollemi Pine \u2014 ~100 wild trees in one secret grove; records are cultivated (CR)",
+    "p039": "Matchstick Banksia \u2014 endangered, tiny WA wheatbelt range",
+    "p041": "Illawarra Greenhood \u2014 endangered orchid, few small populations",
+    "p042": "King Spider Orchid \u2014 critically endangered"
+  },
+  "counts": {
+    "p001": {
+      "name": "Tasmanian Blue Gum",
+      "sci": "Eucalyptus globulus",
+      "records": 6789,
+      "rarity": "uncommon"
+    },
+    "p002": {
+      "name": "Blackwood",
+      "sci": "Acacia melanoxylon",
+      "records": 51949,
+      "rarity": "common"
+    },
+    "p003": {
+      "name": "Coast Banksia",
+      "sci": "Banksia integrifolia",
+      "records": 10865,
+      "rarity": "common"
+    },
+    "p004": {
+      "name": "Silky Oak",
+      "sci": "Grevillea robusta",
+      "records": 6731,
+      "rarity": "uncommon"
+    },
+    "p005": {
+      "name": "Crimson Bottlebrush",
+      "sci": "Callistemon citrinus",
+      "records": 4336,
+      "rarity": "uncommon"
+    },
+    "p006": {
+      "name": "River Red Gum",
+      "sci": "Eucalyptus camaldulensis",
+      "records": 43730,
+      "rarity": "common"
+    },
+    "p007": {
+      "name": "Silver Wattle",
+      "sci": "Acacia dealbata",
+      "records": 24525,
+      "rarity": "common"
+    },
+    "p008": {
+      "name": "Saw Banksia",
+      "sci": "Banksia serrata",
+      "records": 16652,
+      "rarity": "common"
+    },
+    "p009": {
+      "name": "Coast Tea-tree",
+      "sci": "Leptospermum laevigatum",
+      "records": 10906,
+      "rarity": "common"
+    },
+    "p010": {
+      "name": "Native Sarsaparilla",
+      "sci": "Hardenbergia violacea",
+      "records": 40612,
+      "rarity": "common"
+    },
+    "p011": {
+      "name": "Forest Red Gum",
+      "sci": "Eucalyptus tereticornis",
+      "records": 24130,
+      "rarity": "common"
+    },
+    "p012": {
+      "name": "Sydney Golden Wattle",
+      "sci": "Acacia longifolia",
+      "records": 16406,
+      "rarity": "common"
+    },
+    "p013": {
+      "name": "Heath Banksia",
+      "sci": "Banksia ericifolia",
+      "records": 7657,
+      "rarity": "uncommon"
+    },
+    "p014": {
+      "name": "Spiny-headed Mat-rush",
+      "sci": "Lomandra longifolia",
+      "records": 82231,
+      "rarity": "common"
+    },
+    "p015": {
+      "name": "Spotted Gum",
+      "sci": "Corymbia maculata",
+      "records": 17101,
+      "rarity": "common"
+    },
+    "p016": {
+      "name": "NSW Waratah",
+      "sci": "Telopea speciosissima",
+      "records": 4020,
+      "rarity": "uncommon"
+    },
+    "p017": {
+      "name": "Grass Tree",
+      "sci": "Xanthorrhoea australis",
+      "records": 7926,
+      "rarity": "uncommon"
+    },
+    "p018": {
+      "name": "Scarlet Banksia",
+      "sci": "Banksia coccinea",
+      "records": 1306,
+      "rarity": "rare"
+    },
+    "p019": {
+      "name": "Mountain Ash",
+      "sci": "Eucalyptus regnans",
+      "records": 7917,
+      "rarity": "uncommon"
+    },
+    "p020": {
+      "name": "Golden Wattle",
+      "sci": "Acacia pycnantha",
+      "records": 32260,
+      "rarity": "common"
+    },
+    "p021": {
+      "name": "Gymea Lily",
+      "sci": "Doryanthes excelsa",
+      "records": 5218,
+      "rarity": "uncommon"
+    },
+    "p022": {
+      "name": "Red & Green Kangaroo Paw",
+      "sci": "Anigozanthos manglesii",
+      "records": 1671,
+      "rarity": "rare"
+    },
+    "p023": {
+      "name": "Burrawang",
+      "sci": "Macrozamia communis",
+      "records": 3635,
+      "rarity": "uncommon"
+    },
+    "p024": {
+      "name": "Firewood Banksia",
+      "sci": "Banksia menziesii",
+      "records": 3223,
+      "rarity": "uncommon"
+    },
+    "p025": {
+      "name": "Pin-cushion Hakea",
+      "sci": "Hakea laurina",
+      "records": 1339,
+      "rarity": "rare"
+    },
+    "p026": {
+      "name": "Brown Boronia",
+      "sci": "Boronia megastigma",
+      "records": 389,
+      "rarity": "rare"
+    },
+    "p027": {
+      "name": "Rough Tree Fern",
+      "sci": "Cyathea australis",
+      "records": 17320,
+      "rarity": "common"
+    },
+    "p028": {
+      "name": "Sturt's Desert Pea",
+      "sci": "Swainsona formosa",
+      "records": 2190,
+      "rarity": "rare"
+    },
+    "p029": {
+      "name": "Wollemi Pine",
+      "sci": "Wollemia nobilis",
+      "records": 301,
+      "rarity": "legendary"
+    },
+    "p030": {
+      "name": "Silver Princess",
+      "sci": "Eucalyptus caesia",
+      "records": 581,
+      "rarity": "rare"
+    },
+    "p031": {
+      "name": "Monga Waratah",
+      "sci": "Telopea mongaensis",
+      "records": 400,
+      "rarity": "rare"
+    },
+    "p032": {
+      "name": "Feather-leaved Banksia",
+      "sci": "Banksia brownii",
+      "records": 351,
+      "rarity": "rare"
+    },
+    "p033": {
+      "name": "Giant Sundew",
+      "sci": "Drosera gigantea",
+      "records": 864,
+      "rarity": "rare"
+    },
+    "p034": {
+      "name": "WA Christmas Tree",
+      "sci": "Nuytsia floribunda",
+      "records": 3532,
+      "rarity": "uncommon"
+    },
+    "p035": {
+      "name": "Silky Emu Bush",
+      "sci": "Eremophila nivea",
+      "records": 158,
+      "rarity": "legendary"
+    },
+    "p036": {
+      "name": "Royal Hakea",
+      "sci": "Hakea victoria",
+      "records": 542,
+      "rarity": "rare"
+    },
+    "p037": {
+      "name": "Scarlet Featherflower",
+      "sci": "Verticordia grandis",
+      "records": 556,
+      "rarity": "rare"
+    },
+    "p038": {
+      "name": "Blue Caladenia",
+      "sci": "Caladenia caerulea",
+      "records": 0,
+      "rarity": "legendary"
+    },
+    "p039": {
+      "name": "Matchstick Banksia",
+      "sci": "Banksia cuneata",
+      "records": 279,
+      "rarity": "legendary"
+    },
+    "p040": {
+      "name": "Mongarlowe Mallee",
+      "sci": "Eucalyptus recurva",
+      "records": 81,
+      "rarity": "legendary"
+    },
+    "p041": {
+      "name": "Illawarra Greenhood",
+      "sci": "Pterostylis gibbosa",
+      "records": 425,
+      "rarity": "legendary"
+    },
+    "p042": {
+      "name": "King Spider Orchid",
+      "sci": "Caladenia huegelii",
+      "records": 451,
+      "rarity": "legendary"
+    },
+    "p043": {
+      "name": "Round-leaf Honeysuckle",
+      "sci": "Lambertia orbifolia",
+      "records": 9,
+      "rarity": "legendary"
+    },
+    "f001": {
+      "name": "Turkey Tail",
+      "sci": "Trametes versicolor",
+      "records": 6423,
+      "rarity": "common"
+    },
+    "f002": {
+      "name": "Split Gill",
+      "sci": "Schizophyllum commune",
+      "records": 6579,
+      "rarity": "common"
+    },
+    "f003": {
+      "name": "Pixie's Parasol",
+      "sci": "Mycena interrupta",
+      "records": 6156,
+      "rarity": "common"
+    },
+    "f004": {
+      "name": "Earthball",
+      "sci": "Scleroderma cepa",
+      "records": 3645,
+      "rarity": "uncommon"
+    },
+    "f005": {
+      "name": "Australian Honey Fungus",
+      "sci": "Armillaria luteobubalina",
+      "records": 3876,
+      "rarity": "uncommon"
+    },
+    "f006": {
+      "name": "Wood Ear",
+      "sci": "Auricularia cornea",
+      "records": 1888,
+      "rarity": "rare"
+    },
+    "f007": {
+      "name": "Ghost Fungus",
+      "sci": "Omphalotus nidiformis",
+      "records": 10629,
+      "rarity": "common"
+    },
+    "f008": {
+      "name": "Anemone Stinkhorn",
+      "sci": "Aseroe rubra",
+      "records": 4036,
+      "rarity": "uncommon"
+    },
+    "f009": {
+      "name": "Basket Fungus",
+      "sci": "Ileodictyon cibarium",
+      "records": 195,
+      "rarity": "legendary"
+    },
+    "f010": {
+      "name": "White Jelly Fungus",
+      "sci": "Tremella fuciformis",
+      "records": 6270,
+      "rarity": "common"
+    },
+    "f011": {
+      "name": "Dyeball",
+      "sci": "Pisolithus tinctorius",
+      "records": 0,
+      "rarity": "legendary"
+    },
+    "f012": {
+      "name": "Veiled Lady",
+      "sci": "Phallus indusiatus",
+      "records": 545,
+      "rarity": "rare"
+    },
+    "f013": {
+      "name": "Native Bolete",
+      "sci": "Boletellus obscurecoccineus",
+      "records": 2049,
+      "rarity": "uncommon"
+    },
+    "f014": {
+      "name": "Emperor Cortinarius",
+      "sci": "Cortinarius archeri",
+      "records": 4228,
+      "rarity": "uncommon"
+    },
+    "f015": {
+      "name": "Sky Blue Mushroom",
+      "sci": "Entoloma virescens",
+      "records": 861,
+      "rarity": "rare"
+    },
+    "f016": {
+      "name": "Bioluminescent Mycena",
+      "sci": "Mycena chlorophos",
+      "records": 553,
+      "rarity": "rare"
+    },
+    "f017": {
+      "name": "Vermilion Waxcap",
+      "sci": "Hygrocybe miniata",
+      "records": 983,
+      "rarity": "rare"
+    },
+    "f018": {
+      "name": "Spectacular Rustgill",
+      "sci": "Gymnopilus junonius",
+      "records": 8619,
+      "rarity": "common"
+    },
+    "f019": {
+      "name": "Beech Orange",
+      "sci": "Cyttaria gunnii",
+      "records": 855,
+      "rarity": "rare"
+    },
+    "f020": {
+      "name": "Native Truffle",
+      "sci": "Tuber oligospermum",
+      "records": 0,
+      "rarity": "legendary"
+    },
+    "f021": {
+      "name": "Elegant Blue Webcap",
+      "sci": "Cortinarius rotundisporus",
+      "records": 3827,
+      "rarity": "uncommon"
+    },
+    "f022": {
+      "name": "Coral Tooth",
+      "sci": "Hericium coralloides",
+      "records": 742,
+      "rarity": "rare"
+    },
+    "f023": {
+      "name": "Barragee Bolete",
+      "sci": "Boletus barragensis",
+      "records": 563,
+      "rarity": "rare"
+    }
+  }
+}
