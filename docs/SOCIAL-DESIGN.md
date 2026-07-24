@@ -58,10 +58,15 @@ scoring (resets each season) comes with Groves.
 
 Real parks and reserves become contestable places.
 
-- **Grove key:** when Nominatim's reverse geocode includes a park/reserve
-  name, the find carries `grove_key = "<suburb>/<park name>"`. No curation
-  needed; groves exist lazily wherever people actually hunt. (Coordinates
-  still never leave the device — a grove is a name, not a polygon.)
+- **Grove key:** the find's coordinates are checked against the park/reserve
+  polygons *containing* them via Overpass's `is_in` (Nominatim's reverse
+  snaps to benches and paths, so it can't name the containing park — tested).
+  The most significant green-space tag wins (national park > protected area >
+  nature reserve > park > reserve > garden > forest), and the find carries
+  `grove_key = "<suburb>/<park name>"`. No curation needed; groves exist
+  lazily wherever people actually hunt. Lookup failure just means no grove —
+  never a blocked find. (Coordinates still never leave the device — a grove
+  is a name, not a polygon.)
 - **Stewardship:** the player with the most distinct species in a grove
   *this season* (Dec–Feb / Mar–May / Jun–Aug / Sep–Nov) is its Steward.
   Seasonal windows ARE the decay mechanic — every season the crown resets
