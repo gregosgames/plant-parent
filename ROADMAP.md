@@ -69,15 +69,15 @@ hunts. Full design: [`docs/GARDEN-DESIGN.md`](docs/GARDEN-DESIGN.md).
 Other people are the endgame content — and now there are places to care about.
 Full architecture: [`docs/SOCIAL-DESIGN.md`](docs/SOCIAL-DESIGN.md).
 
-- [ ] Profiles + friend codes
-- [ ] **Groves v1** — real parks/reserves become Groves; the season's top
-      *biodiversity contributor* becomes Steward (name on the map, crown on
-      the grove). Stewardship decays and is contestable — the gym mechanic,
-      but the contest verb is finding more nature. Supabase-backed.
-- [ ] Real Local Legend leaderboards per suburb (Supabase-backed)
-- [ ] **Crews** — small teams (school class, bushcare group, uni club);
-      crew-held Groves
-- [ ] **Seed gifting** — send duplicate-find seeds to friends (garden v2)
+- [x] Profiles + friend codes
+- [x] **Groves v1** — real parks/reserves become Groves (Overpass `is_in`
+      polygon detection); the season's top *biodiversity contributor* is
+      Steward 👑. Seasonal reset is the decay. Supabase-backed.
+- [x] Real Local Legend leaderboards per suburb (Supabase-backed)
+- [x] **Crews** — small teams joined by code (30 cap); crew score = union of
+      members' species per season. (Crew-held Groves: later.)
+- [x] **Seed gifting** — duplicate seeds sent by friend code, 5/day cap,
+      claimed on sync; seeds move, never minted
 - [ ] Peer ID confirmation, iNaturalist-style
 - [ ] Biome badges — coastal, alpine, rainforest, desert, mallee
 - [ ] Contribute-to-science toggle — opt-in submission to iNaturalist/ALA
