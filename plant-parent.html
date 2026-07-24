@@ -1324,6 +1324,9 @@
 
     <div class="section-title">Local Legends</div>
     <div id="leaderboard"></div>
+
+    <div class="section-title">Your Groves</div>
+    <div id="grovesList"></div>
   </section>
 
   <!-- ============= BOTTOM NAV ============= -->
@@ -2152,6 +2155,59 @@ function fuzzLocation(loc) {
 let geocodeCache = {};
 try { geocodeCache = JSON.parse(localStorage.getItem('plantparent.geocache') || '{}'); } catch {}
 
+/* ---- Grove lookup (Overpass) ----
+   A grove is a named park/reserve polygon containing the find. Overpass's
+   is_in returns the areas containing a point; we pick the most significant
+   green-space tag. (Nominatim can't do this — its reverse snaps to benches
+   and paths, so docs/SOCIAL-DESIGN.md's grove mechanism lives here.)
+   Failure quietly yields null: groves are a bonus, never a blocker. */
+const OVERPASS_ENDPOINTS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+];
+const GROVE_TAG_RANK = [
+  ['boundary', 'national_park'],
+  ['boundary', 'protected_area'],
+  ['leisure', 'nature_reserve'],
+  ['leisure', 'park'],
+  ['landuse', 'recreation_ground'],
+  ['leisure', 'garden'],
+  ['landuse', 'forest'],
+];
+
+async function lookupGrove(lat, lng) {
+  const cacheKey = 'grove:' + `${Math.round(lat * 1000) / 1000},${Math.round(lng * 1000) / 1000}`;
+  if (cacheKey in geocodeCache) return geocodeCache[cacheKey];
+  const q = `[out:json][timeout:8];is_in(${lat},${lng});out tags;`;
+  for (const endpoint of OVERPASS_ENDPOINTS) {
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 7000); // never stall the ID flow
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'data=' + encodeURIComponent(q),
+        signal: ctrl.signal,
+      });
+      clearTimeout(timer);
+      if (!res.ok) continue;
+      const data = await res.json();
+      let best = null, bestRank = Infinity;
+      for (const el of (data.elements || [])) {
+        const t = el.tags || {};
+        if (!t.name) continue;
+        const rank = GROVE_TAG_RANK.findIndex(([k, v]) => t[k] === v);
+        if (rank !== -1 && rank < bestRank) { bestRank = rank; best = t.name; }
+      }
+      geocodeCache[cacheKey] = best; // caches null too — "not in a park" is an answer
+      try { localStorage.setItem('plantparent.geocache', JSON.stringify(geocodeCache)); } catch {}
+      return best;
+    } catch (e) { /* instance down or slow — try the next */ }
+  }
+  console.warn('[PP] Grove lookup unavailable — find proceeds without a grove');
+  return null; // deliberately uncached so a later find retries
+}
+
 async function reverseGeocode(lat, lng) {
   const cacheKey = `${Math.round(lat * 1000) / 1000},${Math.round(lng * 1000) / 1000}`;
   if (geocodeCache[cacheKey]) return geocodeCache[cacheKey];
@@ -2547,8 +2603,15 @@ async function startIdentification(photoDataUrl) {
     `);
   }
 
-  const suburb = loc ? await reverseGeocode(loc.lat, loc.lng) : null;
-  showResult(species, photoDataUrl, loc, suburb);
+  let geo = null;
+  if (loc) {
+    const [suburb, grove] = await Promise.all([
+      reverseGeocode(loc.lat, loc.lng),
+      lookupGrove(loc.lat, loc.lng),
+    ]);
+    geo = { suburb, grove };
+  }
+  showResult(species, photoDataUrl, loc, geo);
 }
 
 function showIDError(err, photoDataUrl) {
@@ -2963,6 +3026,7 @@ async function syncPush(discovery) {
       lat: discovery.lat,
       lng: discovery.lng,
       suburb: discovery.suburb,
+      grove_key: discovery.groveKey || null,
       is_local_legend: !!discovery.isLocalLegend,
       ts: discovery.ts,
     };
@@ -2979,7 +3043,7 @@ async function syncPush(discovery) {
         kingdom: discovery.kingdom,
         rarity: discovery.rarity,
         suburb: discovery.suburb || null,
-        grove_key: null, // groves land in slice 2
+        grove_key: discovery.groveKey || null,
         found_at: new Date(discovery.ts).toISOString(),
       });
       if (sErr) console.warn('Sighting share failed:', sErr.message);
@@ -3028,6 +3092,7 @@ async function syncPull() {
     lat: r.lat,
     lng: r.lng,
     suburb: r.suburb,
+    groveKey: r.grove_key || null,
     isLocalLegend: r.is_local_legend,
     ts: r.ts,
   }));
@@ -3163,7 +3228,33 @@ create or replace view suburb_leaderboard with (security_invoker = true) as
   from sightings s
   join profiles p on p.id = s.user_id
   where s.suburb is not null
-  group by s.suburb, s.user_id, p.handle;`;
+  group by s.suburb, s.user_id, p.handle;
+
+-- ===== Social layer, slice 2: Groves =====
+-- Cloud discoveries also carry the grove (harmless if already present)
+alter table discoveries add column if not exists grove_key text;
+
+-- Grove leaderboard, windowed by southern-hemisphere season. The Steward
+-- of a grove is its top row for the current season — the seasonal reset
+-- IS the decay mechanic. December belongs to the following year's summer.
+create or replace view grove_leaderboard with (security_invoker = true) as
+  select s.grove_key,
+         s.suburb,
+         s.user_id,
+         p.handle,
+         (case when extract(month from s.found_at) = 12
+               then extract(year from s.found_at)::int + 1
+               else extract(year from s.found_at)::int end)::text
+         || '-' ||
+         (case when extract(month from s.found_at) in (12,1,2) then 'summer'
+               when extract(month from s.found_at) in (3,4,5)  then 'autumn'
+               when extract(month from s.found_at) in (6,7,8)  then 'winter'
+               else 'spring' end) as season_key,
+         count(distinct s.species_id) as species
+  from sightings s
+  join profiles p on p.id = s.user_id
+  where s.grove_key is not null
+  group by 1, 2, 3, 4, 5;`;
 
 /* ============= SETTINGS MODAL ============= */
 function openSettings() {
@@ -3496,7 +3587,7 @@ function updateAIPill() {
 window.openSettings = openSettings;
 $('#settingsBtn').addEventListener('click', openSettings);
 
-function showResult(species, photo, loc, suburb) {
+function showResult(species, photo, loc, geo) {
   // Non-native: don't count toward IDs limit, don't add to herbarium
   if (species.isNonNative) {
     openModal(`
@@ -3594,6 +3685,11 @@ function showResult(species, photo, loc, suburb) {
         <div class="meta-lbl">Date</div>
         <div class="meta-val">${new Date().toLocaleDateString()}</div>
       </div>
+      ${geo?.grove ? `
+      <div class="meta-item" style="grid-column:1/-1">
+        <div class="meta-lbl">🌳 Grove</div>
+        <div class="meta-val">${geo.grove}${geo.suburb ? ` · ${geo.suburb}` : ''}</div>
+      </div>` : ''}
     </div>
 
     ${reachedSlotLimit ? `
@@ -3613,7 +3709,7 @@ function showResult(species, photo, loc, suburb) {
       added = true;
       btn.disabled = true;     // visual feedback + native click block
       btn.textContent = 'Added ✓';
-      addDiscovery(species, photo, loc, suburb, isLocalLegend);
+      addDiscovery(species, photo, loc, geo, isLocalLegend);
       closeModal();
       showToast(`+${xp} XP · added to ${isFungi ? 'Mycarium' : 'Herbarium'} · 🌰 seed collected`, 2800);
     }, { once: true });        // belt-and-braces: listener auto-removes after first fire
@@ -3622,11 +3718,12 @@ function showResult(species, photo, loc, suburb) {
   updateHeader();
 }
 
-function addDiscovery(species, photo, loc, suburb, isLocalLegend) {
+function addDiscovery(species, photo, loc, geo, isLocalLegend) {
   // Sensitive species only ever get generalised coordinates on the record
   const sensitive = isSensitiveRarity(species.rarity);
   const storedLoc = loc && sensitive ? fuzzLocation(loc) : loc;
   const season = seasonInfo(species);
+  const suburb = geo?.suburb || null;
   const discovery = {
     id: uid(),
     speciesId: species.id,
@@ -3639,6 +3736,7 @@ function addDiscovery(species, photo, loc, suburb, isLocalLegend) {
     lat: storedLoc?.lat,
     lng: storedLoc?.lng,
     suburb,
+    groveKey: geo?.grove ? `${suburb || 'unknown'}/${geo.grove}` : null,
     locationFuzzed: !!(loc && sensitive),
     seasonBonus: season.inSeason ? Math.round((RARITY[species.rarity]?.xp || 0) * 0.5) : 0,
     isLocalLegend,
@@ -3850,7 +3948,7 @@ function showDetail(id) {
       <div class="meta-item"><div class="meta-lbl">Rarity</div><div class="meta-val">${RARITY[d.rarity].label}</div></div>
       <div class="meta-item"><div class="meta-lbl">XP earned</div><div class="meta-val">+${RARITY[d.rarity].xp}</div></div>
       <div class="meta-item"><div class="meta-lbl">Found</div><div class="meta-val">${new Date(d.ts).toLocaleDateString()}</div></div>
-      <div class="meta-item" style="grid-column:1/-1"><div class="meta-lbl">Location</div><div class="meta-val">${d.lat ? `${d.lat.toFixed(d.locationFuzzed ? 2 : 4)}, ${d.lng.toFixed(d.locationFuzzed ? 2 : 4)}` : 'Unknown'}${d.suburb ? ` · ${d.suburb}` : ''}${d.locationFuzzed ? '<div style="font-size:11px; color:var(--muted); margin-top:4px;">📍 Generalised to ~1km to protect this species</div>' : ''}</div></div>
+      <div class="meta-item" style="grid-column:1/-1"><div class="meta-lbl">Location</div><div class="meta-val">${d.lat ? `${d.lat.toFixed(d.locationFuzzed ? 2 : 4)}, ${d.lng.toFixed(d.locationFuzzed ? 2 : 4)}` : 'Unknown'}${d.suburb ? ` · ${d.suburb}` : ''}${d.groveKey ? ` · 🌳 ${d.groveKey.split('/').slice(1).join('/')}` : ''}${d.locationFuzzed ? '<div style="font-size:11px; color:var(--muted); margin-top:4px;">📍 Generalised to ~1km to protect this species</div>' : ''}</div></div>
     </div>
     ${d.isLocalLegend ? '<div class="xp-burst" style="margin-top:14px;">🏆 Local Legend find</div>' : ''}
     <button class="btn" id="shareCardBtn" style="margin-top:14px">🪪 Share card</button>
@@ -4058,6 +4156,7 @@ function renderProfile() {
   }
 
   renderLeaderboard(); // async — fills #leaderboard when data arrives
+  renderGroves();
 
   // Badges — standard + any earned event badges
   const eventBadgeDefs = EVENTS.map(ev => ({ ...ev.reward.badge, desc: `${ev.name} event` }));
@@ -4075,6 +4174,86 @@ function renderProfile() {
       <div class="b-desc">${b.desc}</div>
     </div>
   `).join('');
+}
+
+/* ============= GROVES ============= */
+// Southern-hemisphere season key, mirroring the grove_leaderboard view:
+// December belongs to the following year's summer.
+function currentSeasonKey(date = new Date()) {
+  const m = date.getMonth() + 1;
+  const y = date.getFullYear() + (m === 12 ? 1 : 0);
+  const season = [12, 1, 2].includes(m) ? 'summer'
+    : [3, 4, 5].includes(m) ? 'autumn'
+    : [6, 7, 8].includes(m) ? 'winter' : 'spring';
+  return `${y}-${season}`;
+}
+
+// The groves you've personally logged finds in (local data — works signed out)
+function renderGroves() {
+  const el = $('#grovesList');
+  if (!el) return;
+  const byGrove = {};
+  for (const d of state.discoveries) {
+    if (!d.groveKey) continue;
+    (byGrove[d.groveKey] = byGrove[d.groveKey] || new Set()).add(d.speciesId);
+  }
+  const entries = Object.entries(byGrove);
+  if (!entries.length) {
+    el.innerHTML = `<div class="lb-empty">Log a find inside a park or reserve and it becomes a Grove — a real place you can steward by finding the most biodiversity there each season. 🌳</div>`;
+    return;
+  }
+  el.innerHTML = entries
+    .sort((a, b) => b[1].size - a[1].size)
+    .map(([key, species]) => {
+      const [suburb, ...rest] = key.split('/');
+      const name = rest.join('/') || suburb;
+      return `<div class="lb-row grove-row" data-grove="${key.replace(/"/g, '&quot;')}" style="cursor:pointer;">
+        <span class="lb-rank">🌳</span>
+        <span class="lb-handle">${name}<br/><span style="font-size:11px; color:var(--muted); font-weight:400;">${suburb}</span></span>
+        <span class="lb-score">${species.size} species</span>
+      </div>`;
+    }).join('');
+  $$('#grovesList .grove-row').forEach(row => {
+    row.addEventListener('click', () => openGroveBoard(row.dataset.grove));
+  });
+}
+
+async function openGroveBoard(groveKey) {
+  const [suburb, ...rest] = groveKey.split('/');
+  const name = rest.join('/') || suburb;
+  const season = currentSeasonKey();
+  const seasonLabel = season.split('-').reverse().join(' ');
+  openModal(`
+    <h2>🌳 ${name}</h2>
+    <p class="lead">${suburb} · ${seasonLabel} season</p>
+    <div id="groveBoard"><div class="lb-empty">Loading…</div></div>
+    <button class="btn secondary" onclick="closeModal()" style="margin-top:12px">Close</button>
+  `);
+  const board = $('#groveBoard');
+  if (!sb || !sbUser || !sbProfile || !settings.shareFinds) {
+    board.innerHTML = `<div class="lb-empty">Sign in and turn on "Share finds" in ⚙️ settings to compete for stewardship of this grove.</div>`;
+    return;
+  }
+  try {
+    const { data, error } = await sb.from('grove_leaderboard')
+      .select('*').eq('grove_key', groveKey).eq('season_key', season)
+      .order('species', { ascending: false }).limit(5);
+    if (error) throw error;
+    if (!data || !data.length) {
+      board.innerHTML = `<div class="lb-empty">No shared finds here this season — the Steward's crown is unclaimed. 👑</div>`;
+      return;
+    }
+    board.innerHTML = data.map((r, i) => `
+      <div class="lb-row ${r.user_id === sbUser.id ? 'me' : ''}">
+        <span class="lb-rank">${i === 0 ? '👑' : i + 1}</span>
+        <span class="lb-handle">@${r.handle}${i === 0 ? ' <span style="font-size:11px; color:var(--ochre-deep); font-weight:700;">STEWARD</span>' : ''}</span>
+        <span class="lb-score">${r.species} species</span>
+      </div>`).join('') +
+      `<p style="font-size:11.5px; color:var(--ink-soft); margin:10px 0 0; line-height:1.4;">Stewardship resets every season — find the most distinct species here to take the crown.</p>`;
+  } catch (e) {
+    console.warn('[PP] Grove board load failed:', e.message);
+    board.innerHTML = `<div class="lb-empty">Couldn't load this grove — run the latest SQL from settings if you haven't.</div>`;
+  }
 }
 
 /* ============= LOCAL LEGENDS LEADERBOARD ============= */
