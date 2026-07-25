@@ -78,10 +78,11 @@ Full architecture: [`docs/SOCIAL-DESIGN.md`](docs/SOCIAL-DESIGN.md).
       members' species per season. (Crew-held Groves: later.)
 - [x] **Seed gifting** — duplicate seeds sent by friend code, 5/day cap,
       claimed on sync; seeds move, never minted
-- [ ] Peer ID confirmation, iNaturalist-style
+- [x] Peer ID confirmation — vouch/question others' finds; 2+ agrees = verified
+- [x] Moderation basics: in-app report + local block list (filters all
+      social surfaces)
 - [ ] Biome badges — coastal, alpine, rainforest, desert, mallee
 - [ ] Contribute-to-science toggle — opt-in submission to iNaturalist/ALA
-- [ ] Moderation basics: report/block, photo review queue
 
 ## Phase 4 — Bud (M7–M8): go native + the event engine
 

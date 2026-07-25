@@ -925,6 +925,29 @@
     line-height: 1.45;
   }
 
+  /* ===================== PEER CONFIRMATION ===================== */
+  .confirm-row {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--bg-cream);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 9px 12px;
+    margin-bottom: 6px;
+  }
+  .cr-main { flex: 1; min-width: 0; }
+  .cr-name { font-size: 13.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cr-verified { font-size: 10px; font-weight: 700; color: var(--uncommon); }
+  .cr-meta { font-size: 11px; color: var(--ink-soft); margin-top: 2px; }
+  .cr-actions { display: flex; gap: 4px; flex-shrink: 0; }
+  .cr-btn {
+    border: 1px solid var(--line); background: white;
+    border-radius: 8px; width: 32px; height: 32px;
+    font-size: 15px; cursor: pointer; padding: 0;
+    display: grid; place-items: center;
+  }
+  .cr-btn.on { background: var(--plant-mist); border-color: var(--plant-soft); }
+  .cr-btn:active { transform: scale(0.92); }
+
   /* ===================== BUTTONS ===================== */
   button.btn {
     background: var(--plant-deep);
@@ -1325,6 +1348,9 @@
 
     <div class="section-title">Local Legends</div>
     <div id="leaderboard"></div>
+
+    <div class="section-title">Confirm nearby finds</div>
+    <div id="confirmList"></div>
 
     <div class="section-title">Crew</div>
     <div id="crewCard"></div>
@@ -3469,7 +3495,66 @@ create or replace view gift_inbox with (security_invoker = true) as
   select g.id, g.from_user, g.to_user, g.species_id, g.species_name, g.status, g.created_at,
          p.handle as from_handle
   from gifts g
-  join profiles p on p.id = g.from_user;`;
+  join profiles p on p.id = g.from_user;
+
+-- ===== Social layer, slice 4: peer confirmation + moderation =====
+-- Peers vouch for (or question) an identification CLAIM — never the photo,
+-- which stays private. 2+ agrees from distinct hunters = community-verified.
+-- This is deliberately weaker than iNaturalist and labelled as such in-app;
+-- the science-grade path is the iNat submission toggle, not these votes.
+create table if not exists confirmations (
+  sighting_id text references sightings on delete cascade,
+  confirmer_id uuid references auth.users not null default auth.uid(),
+  vote text not null check (vote in ('agree','unsure')),
+  created_at timestamptz default now(),
+  primary key (sighting_id, confirmer_id)
+);
+
+alter table confirmations enable row level security;
+drop policy if exists "confirmations read" on confirmations;
+drop policy if exists "confirm others only" on confirmations;
+drop policy if exists "confirmations update own" on confirmations;
+drop policy if exists "confirmations delete own" on confirmations;
+create policy "confirmations read" on confirmations for select to authenticated using (true);
+-- You may vote on anyone's sighting except your own
+create policy "confirm others only" on confirmations for insert with check (
+  confirmer_id = auth.uid()
+  and auth.uid() <> (select user_id from sightings where id = sighting_id)
+);
+create policy "confirmations update own" on confirmations for update using (confirmer_id = auth.uid());
+create policy "confirmations delete own" on confirmations for delete using (confirmer_id = auth.uid());
+
+-- Agree tally per sighting (verified = agrees >= 2)
+create or replace view sighting_agrees with (security_invoker = true) as
+  select sighting_id, count(*) filter (where vote = 'agree') as agrees
+  from confirmations group by sighting_id;
+
+-- Recent shared sightings for a suburb — the surface hunters confirm on.
+-- Bounded pull tool, not a feed: query with .eq(suburb).limit(N).
+create or replace view nearby_sightings with (security_invoker = true) as
+  select s.id, s.user_id, p.handle, s.species_id, s.name, s.kingdom, s.rarity,
+         s.suburb, s.grove_key, s.found_at,
+         coalesce(a.agrees, 0) as agrees
+  from sightings s
+  join profiles p on p.id = s.user_id
+  left join sighting_agrees a on a.sighting_id = s.id;
+
+-- Reports: a hunter flags a sighting. Reporter-visible only; triage is
+-- out-of-band. Public surface is handles + claims, so this stays small.
+create table if not exists reports (
+  id uuid primary key default gen_random_uuid(),
+  reporter_id uuid references auth.users not null default auth.uid(),
+  sighting_id text,
+  reported_handle text,
+  reason text,
+  created_at timestamptz default now()
+);
+
+alter table reports enable row level security;
+drop policy if exists "reports insert own" on reports;
+drop policy if exists "reports read own" on reports;
+create policy "reports insert own" on reports for insert with check (reporter_id = auth.uid());
+create policy "reports read own"   on reports for select using (reporter_id = auth.uid());`;
 
 /* ============= SETTINGS MODAL ============= */
 function openSettings() {
@@ -4371,6 +4456,7 @@ function renderProfile() {
   }
 
   renderLeaderboard(); // async — fills #leaderboard when data arrives
+  renderConfirmList(); // async — fills #confirmList
   renderCrew();        // async — fills #crewCard
   renderGroves();
 
@@ -4390,6 +4476,98 @@ function renderProfile() {
       <div class="b-desc">${b.desc}</div>
     </div>
   `).join('');
+}
+
+/* ============= MODERATION: block list ============= */
+// Blocking is local and immediate: a blocked handle vanishes from every
+// social surface on this device. Reports are the escalation path.
+function blockedHandles() { return settings.blocked || []; }
+function isBlocked(handle) { return blockedHandles().includes(handle); }
+function blockHandle(handle) {
+  settings.blocked = [...new Set([...(settings.blocked || []), handle])];
+  saveSettings();
+}
+async function reportSighting(sighting) {
+  if (!sb || !sbUser) return;
+  try {
+    await sb.from('reports').insert({
+      sighting_id: sighting.id || null,
+      reported_handle: sighting.handle || null,
+      reason: 'flagged in-app',
+    });
+  } catch (e) { console.warn('Report failed:', e.message); }
+}
+function confirmModeration(sighting) {
+  // Called from the confirm list's ⋯ action
+  const choice = prompt(`@${sighting.handle} — type "block" to hide this hunter, or "report" to flag this find:`);
+  if (choice === 'block') { blockHandle(sighting.handle); renderProfile(); showToast(`@${sighting.handle} hidden`); }
+  else if (choice === 'report') { reportSighting(sighting); showToast('Reported — thanks for keeping it clean'); }
+}
+window.confirmModeration = confirmModeration;
+
+/* ============= PEER CONFIRMATION ============= */
+// A bounded pull tool (NOT a feed): the 10 most recent shared sightings in
+// your suburb, by other hunters, to vouch for or question. 2+ agrees marks a
+// find community-verified. Votes are on the ID claim, never the photo.
+async function renderConfirmList() {
+  const el = $('#confirmList');
+  if (!el) return;
+  if (!sb || !sbUser || !sbProfile || !settings.shareFinds) { el.innerHTML = ''; return; }
+  const suburb = [...state.discoveries].sort((a, b) => b.ts - a.ts).map(d => d.suburb).find(Boolean);
+  if (!suburb) { el.innerHTML = ''; return; }
+  try {
+    const { data, error } = await sb.from('nearby_sightings')
+      .select('*').eq('suburb', suburb)
+      .order('found_at', { ascending: false }).limit(20);
+    if (error) throw error;
+    // mine and blocked hunters filtered out; cap at 10
+    const myVotes = await fetchMyVotes((data || []).map(s => s.id));
+    const list = (data || []).filter(s => s.user_id !== sbUser.id && !isBlocked(s.handle)).slice(0, 10);
+    if (!list.length) { el.innerHTML = `<div class="lb-empty">No other hunters' finds to confirm in ${suburb} yet.</div>`; return; }
+    el.innerHTML = list.map(s => {
+      const verified = s.agrees >= 2;
+      const voted = myVotes[s.id];
+      return `<div class="confirm-row">
+        <div class="cr-main">
+          <div class="cr-name">${s.name} ${verified ? '<span class="cr-verified">✓ verified</span>' : ''}</div>
+          <div class="cr-meta">@${s.handle} · <span class="rarity-tag rarity-${s.rarity}" style="font-size:9px; padding:1px 6px; border-radius:999px;">${RARITY[s.rarity].label}</span> · ${s.agrees} agree${s.agrees === 1 ? '' : 's'}</div>
+        </div>
+        <div class="cr-actions">
+          <button class="cr-btn ${voted === 'agree' ? 'on' : ''}" data-agree="${s.id}" title="Agree">👍</button>
+          <button class="cr-btn ${voted === 'unsure' ? 'on' : ''}" data-unsure="${s.id}" title="Unsure">🤔</button>
+          <button class="cr-btn" data-mod="${s.id}" title="Report or block">⋯</button>
+        </div>
+      </div>`;
+    }).join('');
+    const byId = Object.fromEntries(list.map(s => [s.id, s]));
+    $$('#confirmList [data-agree]').forEach(btn => btn.addEventListener('click', () => castVote(btn.dataset.agree, 'agree')));
+    $$('#confirmList [data-unsure]').forEach(btn => btn.addEventListener('click', () => castVote(btn.dataset.unsure, 'unsure')));
+    $$('#confirmList [data-mod]').forEach(btn => btn.addEventListener('click', () => confirmModeration(byId[btn.dataset.mod])));
+  } catch (e) {
+    console.warn('[PP] Confirm list failed:', e.message);
+    el.innerHTML = '';
+  }
+}
+
+async function fetchMyVotes(sightingIds) {
+  if (!sightingIds.length) return {};
+  try {
+    const { data } = await sb.from('confirmations')
+      .select('sighting_id, vote').eq('confirmer_id', sbUser.id).in('sighting_id', sightingIds);
+    return Object.fromEntries((data || []).map(v => [v.sighting_id, v.vote]));
+  } catch (e) { return {}; }
+}
+
+async function castVote(sightingId, vote) {
+  try {
+    const { error } = await sb.from('confirmations')
+      .upsert({ sighting_id: sightingId, confirmer_id: sbUser.id, vote }, { onConflict: 'sighting_id,confirmer_id' });
+    if (error) throw error;
+    showToast(vote === 'agree' ? '👍 Agreed' : '🤔 Marked unsure');
+    renderConfirmList();
+  } catch (e) {
+    showToast('Vote failed: ' + (e.message || 'unknown'));
+  }
 }
 
 /* ============= CREW CARD ============= */
@@ -4560,11 +4738,12 @@ async function openGroveBoard(groveKey) {
       .select('*').eq('grove_key', groveKey).eq('season_key', season)
       .order('species', { ascending: false }).limit(5);
     if (error) throw error;
-    if (!data || !data.length) {
+    const rows = (data || []).filter(r => !isBlocked(r.handle));
+    if (!rows.length) {
       board.innerHTML = `<div class="lb-empty">No shared finds here this season — the Steward's crown is unclaimed. 👑</div>`;
       return;
     }
-    board.innerHTML = data.map((r, i) => `
+    board.innerHTML = rows.map((r, i) => `
       <div class="lb-row ${r.user_id === sbUser.id ? 'me' : ''}">
         <span class="lb-rank">${i === 0 ? '👑' : i + 1}</span>
         <span class="lb-handle">@${r.handle}${i === 0 ? ' <span style="font-size:11px; color:var(--ochre-deep); font-weight:700;">STEWARD</span>' : ''}</span>
@@ -4598,11 +4777,12 @@ async function renderLeaderboard() {
       .select('*').eq('suburb', suburb)
       .order('species', { ascending: false }).limit(10);
     if (error) throw error;
-    if (!data || !data.length) {
+    const rows = (data || []).filter(r => !isBlocked(r.handle));
+    if (!rows.length) {
       el.innerHTML = `<div class="lb-empty">No shared finds in ${suburb} yet — you could be the first Local Legend here.</div>`;
       return;
     }
-    el.innerHTML = `<div class="lb-title">📍 ${suburb}</div>` + data.map((r, i) => `
+    el.innerHTML = `<div class="lb-title">📍 ${suburb}</div>` + rows.map((r, i) => `
       <div class="lb-row ${r.user_id === sbUser.id ? 'me' : ''}">
         <span class="lb-rank">${['🥇', '🥈', '🥉'][i] || i + 1}</span>
         <span class="lb-handle">@${r.handle}</span>
