@@ -1071,6 +1071,16 @@ const Ball = {
   speed() { return Math.hypot(this.vx, this.vz); },
   distFromCentre() { return Math.hypot(this.x - PITCH_LEN / 2, this.z); },
 
+  /* Where and when it comes down, solved rather than watched. Nothing slows
+     a struck ball horizontally while it is in the air, so this is exact from
+     the moment it leaves the bat — which is what lets a fielder be sent to
+     the right patch of grass in time to be standing under it. */
+  landing() {
+    if (this.y <= 0.04 && this.vy <= 0) return null;
+    const t = (this.vy + Math.sqrt(this.vy * this.vy + 2 * G * Math.max(0, this.y))) / G;
+    return { t: t, x: this.x + this.vx * t, z: this.z + this.vz * t };
+  },
+
   draw() {
     if (!this.live) return;
     for (let i = 0; i < this.trail.length; i++) {
@@ -1164,6 +1174,10 @@ function buildField(tier, dossier) {
   return f;
 }
 
+/* A fielder's position right now — his station, or wherever he has run to. */
+const fx = p => p.chase ? p.cx : p.x;
+const fz = p => p.chase ? p.cz : p.z;
+
 /* ===================== SHOT RESOLUTION =====================
    Stats never roll outcomes. They set window width and deviation cone size;
    the input decides everything else. */
@@ -1251,7 +1265,7 @@ function fieldTheBall(field) {
       const tb = path.timeAt(s);
       if (tb > 14) break;
       const p = path.at(s);
-      const gap = Math.max(0, Math.hypot(p.x - f.x, p.z - f.z) - FIELD_REACH);
+      const gap = Math.max(0, Math.hypot(p.x - fx(f), p.z - fz(f)) - FIELD_REACH);
       if (fieldReact() + gap / fieldSpeed() <= tb) {
         if (!best || tb < best.t) best = { f: f, s: s, t: tb, x: p.x, z: p.z };
         break;
@@ -1280,41 +1294,87 @@ function fieldTheBall(field) {
   };
 }
 
+/* ===================== THE CATCHER =====================
+   A catch is a man getting to the ball, not a radius around where it lands.
+
+   The first build judged catches at the bounce with a reach that grew with
+   hang time — up to a dozen metres for a skier — and then dropped the ball
+   into the hands of whoever qualified. On the scorecard that reads fine. On
+   screen the ball came down in an empty patch of outfield and teleported
+   into somebody standing a long way away, which is not a catch anyone
+   believes.
+
+   So the decision is made in the air instead. The moment the ball is struck
+   its landing point is known exactly; whoever can get there in time is sent,
+   and you watch him run under it. He is standing on the spot when the ball
+   arrives, so the take happens where the ball actually was. If nobody can
+   get there, nobody catches it — and the man who was sent is already at the
+   ball, so he fields it immediately, which is right too. */
+const CATCH_REACH = 2.1;                 // dive, or a hand stuck out
+
+const Catcher = {
+  who: null, x: 0, z: 0, t0: 0, t1: 0,
+
+  clear() { if (this.who) { this.who.chase = 0; } this.who = null; },
+
+  /* Called once, the instant the ball is struck. */
+  commit(field, opts) {
+    this.clear();
+    const L = Ball.landing();
+    if (!L || L.t < 0.45) return;                       // never up long enough
+    if (Math.hypot(L.x - PITCH_LEN / 2, L.z) >= boundaryR() - 0.5) return;   // it is six
+    const reach = CATCH_REACH + (opts && opts.sharpCatching ? 0.5 : 0);
+    let best = null;
+    for (const p of field) {
+      if (p.keeper && !(opts && opts.edged)) continue;   // he takes edges, not skiers
+      const d = Math.hypot(L.x - p.hx, L.z - p.hz);
+      if (fieldReact() + Math.max(0, d - reach) / fieldSpeed() <= L.t
+          && (!best || d < best.d)) best = { p: p, d: d };
+    }
+    if (!best) return;
+    this.who = best.p; this.x = L.x; this.z = L.z;
+    this.t0 = now(); this.t1 = now() + L.t;
+    best.p.chase = 2; best.p.cx = best.p.hx; best.p.cz = best.p.hz;
+  },
+
+  /* He runs. By the time the ball arrives he is standing on the spot. */
+  update() {
+    if (!this.who) return;
+    const span = Math.max(0.12, this.t1 - this.t0 - fieldReact());
+    const u = clamp((now() - this.t0 - fieldReact()) / span, 0, 1);
+    this.who.cx = lerp(this.who.hx, this.x, u);
+    this.who.cz = lerp(this.who.hz, this.z, u);
+  },
+  /* Is he there, with the ball in front of him? */
+  holds() {
+    return this.who && Math.hypot(Ball.x - this.who.cx, Ball.z - this.who.cz) < CATCH_REACH + 0.4;
+  },
+};
+
 /* Watch a struck ball until something happens to it. Called every frame. */
 function resolveTravel(field, opts) {
   if (Ball.distFromCentre() >= boundaryR()) {
     return { type: Ball.y > 0.4 && !Ball.rolling ? 'six' : 'four' };
   }
-  // A flat ball straight at someone, chest high. A middled drive stays under
-  // this, which is the whole point.
+  // A flat ball straight at someone, chest high, taken where he stands. A
+  // middled drive stays under this, which is the whole point. The keeper is
+  // in this one only for an edge — a glance through the same airspace is a
+  // legitimate shot and has to be allowed to run away.
   if (!Ball.rolling && Ball.y > 1.05 && Ball.y < 2.7 && Ball.vy > -7) {
     for (const p of field) {
-      if (p.keeper) continue;
-      if (Math.hypot(Ball.x - p.x, Ball.z - p.z) < 1.9 + (opts.sharpCatching ? 0.4 : 0)) {
-        return { type: 'caught', by: p };
-      }
+      if (p.keeper && !opts.edged) continue;
+      const reach = (p.keeper ? 1.6 : 1.9) + (opts.sharpCatching ? 0.4 : 0);
+      if (Math.hypot(Ball.x - fx(p), Ball.z - fz(p)) < reach) return { type: 'caught', by: p };
     }
   }
-  // Everything else in the air is decided where it lands: the longer it hung
-  // up there, the further someone had to come to be under it. It has to have
-  // actually gone up first — a drive that skims along and pitches ten metres
-  // away is a ball to chase, not a catch, and treating every first bounce as
-  // a chance had cover taking a screamer off every cover drive.
+  // And the one somebody ran under. Only the man who was sent for it, only if
+  // he got there, and only if the ball ever went up — a drive that skims along
+  // and pitches ten metres away is a ball to chase, not a chance.
   if (Ball.landed && !Ball.catchChecked) {
     Ball.catchChecked = true;
-    if (Ball.apex > 1.9 && Ball.hangT > 0.62) {
-      const reach = 2.0 + Ball.hangT * fieldSpeed() * 0.52 + (opts.sharpCatching ? 0.6 : 0);
-      for (const p of field) {
-        if (p.keeper) continue;
-        if (Math.hypot(Ball.x - p.x, Ball.z - p.z) < reach) return { type: 'caught', by: p };
-      }
+    if (Ball.apex > 1.4 && Ball.hangT > 0.45 && Catcher.holds()) {
+      return { type: 'caught', by: Catcher.who };
     }
-  }
-  // keeper / slip: only an edge carries behind the stumps. A glance is a
-  // legitimate shot through the same airspace and must run away.
-  if (opts.edged && Ball.x > PITCH_LEN + 0.6 && Ball.x < PITCH_LEN + 3.6
-      && Math.abs(Ball.z) < 2.8 && Ball.y > 0.25 && Ball.y < 2.4 && !Ball.rolling) {
-    return { type: 'caughtBehind' };
   }
   // Once it is down and nobody has caught it, the field has it. This has to
   // happen the moment it lands rather than once it has settled into a roll:
@@ -1333,7 +1393,7 @@ function resolveTravel(field, opts) {
    batters turning for the second. Played out rather than announced, and
    compressed so the next ball is still seconds away. */
 const Chase = {
-  on: false, t: 0, speed: 1, plan: null, runs: 0, shown: 0, done: 0,
+  on: false, t: 0, speed: 1, plan: null, runs: 0, shown: 0, done: 0, sx: 0, sz: 0,
 
   start(plan, runs) {
     if (!plan || !plan.fielder) { this.on = false; return; }
@@ -1342,6 +1402,9 @@ const Chase = {
     // out to the throw coming back. Compressed so the next ball is close.
     this.done = runs === 0 ? plan.tIntercept + 0.5 : plan.total + 0.35;
     this.speed = clamp(this.done / 1.8, 1, 3.4);
+    // he starts from where he is, which is not always where he stands: he may
+    // already have run twenty metres going for the catch he did not get
+    this.sx = fx(plan.fielder); this.sz = fz(plan.fielder);
     plan.fielder.chase = 1;
   },
   stop() {
@@ -1369,8 +1432,8 @@ const Chase = {
       // snapping flat the instant the chase takes the ball over
       Ball.y = 0.036 + Math.abs(Math.sin(this.t * 5.5)) * 0.65 * Math.exp(-this.t * 1.8);
       const u = clamp((this.t - fieldReact()) / Math.max(0.15, p.tIntercept - fieldReact()), 0, 1);
-      p.fielder.cx = lerp(p.fielder.hx, p.x, u);
-      p.fielder.cz = lerp(p.fielder.hz, p.z, u);
+      p.fielder.cx = lerp(this.sx, p.x, u);
+      p.fielder.cz = lerp(this.sz, p.z, u);
     } else if (this.t < p.tIntercept + p.gather) {
       Ball.x = p.x; Ball.z = p.z; Ball.y = 0.24;
       p.fielder.cx = p.x; p.fielder.cz = p.z;
@@ -1412,7 +1475,9 @@ const Take = {
   on: false, t: 0, who: null, x: 0, y: 0, z: 0, keeper: false,
 
   start(p, y, keeper) {
-    if (!p) return false;
+    if (!p) return false;                // only ever true for a keeper gather
+                                         // with no keeper set; a catch always
+                                         // arrives here with the man who took it
     this.on = true; this.t = 0; this.who = p; this.keeper = !!keeper;
     this.x = p.chase ? p.cx : p.x;
     this.z = p.chase ? p.cz : p.z;
@@ -1617,7 +1682,7 @@ const M = {
     };
     this.field = buildField(tier, null);
     this.msg = ''; this.msgT = 0;
-    Chase.stop(); Take.stop();
+    Chase.stop(); Take.stop(); Catcher.clear();
   },
   bowlerNow() { return this.attack[Math.floor(this.bat.balls / 6) % this.attack.length]; },
   say(text, big) { this.msg = text; this.msgT = now(); this.msgBig = !!big; },
@@ -1645,7 +1710,7 @@ const Bat = {
     this.outcome = null; this.ghost = null; this.flourish = false;
     this.earlyHold = false; this.backlift = 0; this.swingT = -9;
     this.marker = null; this.pastStumps = null;
-    Chase.stop(); Take.stop();
+    Chase.stop(); Take.stop(); Catcher.clear();
     Input.flush();
 
     this.bowler = M.bowlerNow();
@@ -1719,6 +1784,7 @@ const Bat = {
       if (rel && !this.swung) this.swing(rel);
       else if (!this.swung && now() > this.contactT + 0.20) this.swing(null);
       if (this.swung && Ball.hit && this.outcome === null) {
+        Catcher.update();
         const r = resolveTravel(M.field, {
           sharpCatching: T.liveField,
           edged: this.swingInfo && this.swingInfo.quality === 'edge',
@@ -1787,6 +1853,7 @@ const Bat = {
     this.swingInfo = { type: type, quality: quality, err: dt, approp: approp };
     this.ghost = { intended: aimAng, actual: angle };
     playShot({ quality: quality, power: power, angleDeg: angle, lift: lift, contactY: this.pred.y });
+    Catcher.commit(M.field, { sharpCatching: T.liveField, edged: quality === 'edge' });
     Snd.bat(quality === 'edge' ? 'edge' : 'middle');
     if (quality === 'middle') {
       M.hitstop = 0.05; M.flash = 1; Cam.kick(this.flourish ? 0.9 : 0.5);
@@ -1807,12 +1874,12 @@ const Bat = {
     b.balls++;
     const o = { wicket: false, runs: 0, label: '', how: '' };
 
-    if (r.type === 'caught' || r.type === 'caughtBehind') {
+    if (r.type === 'caught') {
       o.wicket = true;
-      o.label = 'CAUGHT';
-      const taker = r.type === 'caughtBehind' ? keeperOf(M.field) : r.by;
-      o.how = r.type === 'caughtBehind' ? 'c wk' : 'c ' + (r.by ? r.by.name.toLowerCase() : 'field');
-      if (Take.start(taker, Ball.y)) Cam.chase(Take.x, 1.5, Take.z);
+      o.label = r.by.keeper ? 'CAUGHT BEHIND' : 'CAUGHT';
+      o.how = r.by.keeper ? 'c wk' : 'c ' + r.by.name.toLowerCase();
+      Take.start(r.by, Ball.y);
+      Cam.chase(Take.x, 1.5, Take.z);
     } else if (r.type === 'six') {
       o.runs = 6; o.label = 'SIX'; b.sixes++;
     } else if (r.type === 'four') {
@@ -1904,7 +1971,7 @@ const Bowl = {
     this.outcome = null; this.ghost = null; this.ai = null;
     this.sweep = 0; this.sweepDir = 1; this.aiSwingT = -9; this.pastStumps = null;
     Ball.live = false;
-    Chase.stop(); Take.stop();
+    Chase.stop(); Take.stop(); Catcher.clear();
     Input.flush();
     Cam.home(false);
     Snd.mode = 'bowl';
@@ -1982,6 +2049,7 @@ const Bowl = {
       Ball.step(dt);
       if (!this.ai.played && now() >= this.ai.swingAt) this.playAI();
       if (this.ai.played && Ball.hit && this.outcome === null) {
+        Catcher.update();
         const r = resolveTravel(M.field, { sharpCatching: true, edged: this.aiQuality === 'edge' });
         if (r) this.finish(r);
         Snd.travelTo(200 + Ball.distFromCentre() * 9);
@@ -2140,6 +2208,7 @@ const Bowl = {
     this.ghost = { intended: aim, actual: angle };
     this.aiQuality = quality;
     playShot({ quality: quality, power: power, angleDeg: angle, lift: lift, contactY: this.pred.y });
+    Catcher.commit(M.field, { sharpCatching: true, edged: quality === 'edge' });
     Snd.bat(quality === 'edge' ? 'edge' : 'middle');
     Snd.travel(220);
   },
@@ -2150,10 +2219,10 @@ const Bowl = {
     const b = M.bowl;
     b.balls++;
     const o = { wicket: false, runs: 0, label: '' };
-    if (r.type === 'caught' || r.type === 'caughtBehind') {
-      o.wicket = true; o.label = r.type === 'caughtBehind' ? 'CAUGHT BEHIND' : 'CAUGHT';
-      const taker = r.type === 'caughtBehind' ? keeperOf(M.field) : r.by;
-      if (Take.start(taker, Ball.y)) Cam.chase(Take.x, 1.5, Take.z);
+    if (r.type === 'caught') {
+      o.wicket = true; o.label = r.by.keeper ? 'CAUGHT BEHIND' : 'CAUGHT';
+      Take.start(r.by, Ball.y);
+      Cam.chase(Take.x, 1.5, Take.z);
     } else if (r.type === 'six') { o.runs = 6; o.label = 'SIX'; }
     else if (r.type === 'four') { o.runs = 4; o.label = 'FOUR'; }
     else if (r.type === 'runs') {

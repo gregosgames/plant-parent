@@ -340,14 +340,31 @@ pad, and the follow-through is allowed to finish and then be held. Archetype,
 not portrait — what is lifted is the shape of the movement and nothing else.
 The AI batter you bowl at plays off the same table, so his shots read too.
 
-### Somebody catches it
+### A catch is a man getting to the ball
 
-Three things used to happen only in the scoreboard. Now:
+Catches were judged at the bounce, against a reach that grew with hang time —
+up to about a dozen metres for a skier — and the ball was then handed to
+whoever qualified. On a scorecard that reads fine. On screen the ball came
+down in an empty patch of outfield and jumped into the hands of somebody
+standing a long way off, which is not a catch anybody believes. Caught behind
+was worse: a box drawn behind the stumps that named no fielder at all.
 
-- **A catch is taken.** The ball snaps into the fielder's hands, his arms go
-  up or out depending on how high it came, he settles it into his chest, and
-  the camera swings on to him. Measured over a stress sample, the taker is on
-  screen and holding the ball on every catch.
+The decision now happens in the air. A struck ball has no horizontal drag, so
+the moment it leaves the bat its landing point and its hang time are known
+exactly. Whoever can cover that ground in the time available is sent, and you
+watch him run under it; he is standing on the spot when the ball arrives, so
+the take happens where the ball actually was. If nobody can get there, nobody
+catches it — and the man who was sent is already at the ball, so he fields it
+straight away, which is also right. The keeper is in the same pool, for edges
+only, so caught behind is a keeper taking a catch like any other.
+
+Audited over 2,100 balls of deliberate slogging across both tiers: every
+dismissal given as caught was taken by a named fielder, and the furthest the
+ball ever moved into his hands was 2.46 m — inside a dive. Fielders ran an
+average of 6 m for their catches and as much as 14.6 m.
+
+Two more that used to happen only in the scoreboard:
+
 - **The keeper takes what you leave.** A ball left alone or beaten used to
   sail on out of the ground with nobody behind the stumps. It now ends in the
   gloves, every time.
