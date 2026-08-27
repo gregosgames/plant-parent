@@ -376,7 +376,16 @@ Two more that used to happen only in the scoreboard:
 The keeper is also drawn during your innings. He stands between the lens and
 the batter, which is why the first build culled him — and why the scene is now
 drawn back to front, each figure queued with its own distance from the lens,
-rather than in a fixed order that put whoever was written last on top.
+rather than in a fixed order that put whoever was written last on top. The
+stumps are in that queue too: painted first, they were painted *under* the
+keeper, so from your own end of the pitch he appeared to be standing in front
+of the wicket he was standing behind.
+
+Between balls the bowler walks back. He used to be drawn standing halfway down
+the pitch while you set your field, which is nowhere a bowler has ever stood;
+he now returns to the top of his mark over about a second and waits there,
+turning the ball over, which is also the design's long walk finally doing its
+job as feedback rather than as an input.
 
 ### The non-striker is out of the way
 

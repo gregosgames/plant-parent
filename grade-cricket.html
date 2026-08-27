@@ -2403,15 +2403,18 @@ function drawGhost(g) {
 /* The bowler, seen head on as he runs at you. Legs scissor, and in the
    last stretch the arm goes over the top — with no faces and no fingers
    that arm and the seam on the ball are the whole tell. */
+const BOWLER_Z = 0.45;
+const markX = awayFromCamera => (awayFromCamera ? -7.0 : -8.0);
+const runupX = (p, awayFromCamera) => lerp(markX(awayFromCamera), RELEASE_X, Math.pow(p, 0.85));
+
 function drawBowlerRunup(p, shirt, style, awayFromCamera) {
-  const startX = awayFromCamera ? -7.0 : -8.0;
-  const x = lerp(startX, RELEASE_X, Math.pow(p, 0.85));
+  const x = runupX(p, awayFromCamera);
   const cyc = Math.sin(p * (isSpin(style) ? 26 : 36)) * 30;
   const del = clamp((p - 0.80) / 0.20, 0, 1);
   // the arm sweeps up behind, over the top, and through
   const armOver = lerp(-40, -300, del);
-  Art.shadow(x, 0.45, 0.42, 0.2);
-  const f = drawFigure(x, 0.45, {
+  Art.shadow(x, BOWLER_Z, 0.42, 0.2);
+  const f = drawFigure(x, BOWLER_Z, {
     view: 'front', shirt: shirt, cap: 'cap',
     legL: 16 + cyc, legR: 16 - cyc,
     armL: del > 0 ? armOver : -34 + cyc * 0.9,
@@ -2419,23 +2422,50 @@ function drawBowlerRunup(p, shirt, style, awayFromCamera) {
     lean: (awayFromCamera ? -1 : 1) * (0.8 + p * 1.6),
     tilt: -del * 2,
   });
-  if (f && del < 0.9) {                  // the ball, in the hand, seam showing
-    const hb = f.handL;
-    const r = Math.max(1.6, f.u * 0.085);
-    Art.disc(hb, r, PAL.ball);
-    ctx.save();
-    ctx.translate(hb.x, hb.y); ctx.rotate(now() * 9);
-    ctx.strokeStyle = PAL.white; ctx.lineWidth = Math.max(1, r * 0.35);
-    ctx.beginPath(); ctx.moveTo(-r * 0.9, 0); ctx.lineTo(r * 0.9, 0); ctx.stroke();
-    ctx.restore();
-  }
+  if (del < 0.9) drawBallInHand(f, 9);    // seam showing, the only tell there is
   return f;
+}
+
+/* The ball turning over in his hand. */
+function drawBallInHand(f, spin) {
+  if (!f) return;
+  const r = Math.max(1.6, f.u * 0.085);
+  Art.disc(f.handL, r, PAL.ball);
+  ctx.save();
+  ctx.translate(f.handL.x, f.handL.y); ctx.rotate(now() * spin);
+  ctx.strokeStyle = PAL.white; ctx.lineWidth = Math.max(1, r * 0.35);
+  ctx.beginPath(); ctx.moveTo(-r * 0.9, 0); ctx.lineTo(r * 0.9, 0); ctx.stroke();
+  ctx.restore();
+}
+
+/* Waiting to bowl. He walks back from his follow-through to the top of his
+   mark and stands there turning the ball over — which is where a bowler is
+   while the field is being set, rather than standing on a length halfway
+   down the pitch, which is where he used to be drawn. */
+function bowlerWaitX(t) {
+  const u = clamp(t / 1.4, 0, 1);
+  return lerp(RELEASE_X, markX(true), u * u * (3 - 2 * u));
+}
+function drawBowlerWaiting(t, shirt) {
+  const u = clamp(t / 1.4, 0, 1);
+  const x = bowlerWaitX(t);
+  const cyc = u < 1 ? Math.sin(t * 8.5) * 15 : 0;
+  const idle = Math.sin(now() * 1.3) * 2.5;
+  Art.shadow(x, BOWLER_Z, 0.42, 0.2);
+  const f = drawFigure(x, BOWLER_Z, {
+    view: 'front', shirt: shirt, cap: 'cap',
+    legL: 11 + cyc, legR: 11 - cyc,
+    armL: -20 - cyc * 0.5 + idle, armR: 20 + cyc * 0.5,
+    lean: u < 1 ? 0.7 : 0,
+  });
+  drawBallInHand(f, u < 1 ? 5 : 2.2);
 }
 
 /* He reacts, visibly, every ball. Beating an opponent is more fun than
    beating a difficulty curve. */
+const REACTION_X = 2.6;
 function drawBowlerReaction(mood, shirt) {
-  const x = 2.6;
+  const x = REACTION_X;
   Art.shadow(x, 0.5, 0.42, 0.2);
   const base = { view: 'front', shirt: shirt, cap: 'cap' };
   if (mood > 0.35) {                     // hands on head
@@ -2641,9 +2671,14 @@ function sceneActors(theirShirt, labels) {
     const p = proj(x, 0, z);
     if (!p.behind && p.d > 1.6) out.push({ d: p.d, fn: fn });
   };
+  // The stumps are in the queue too. Painting them first put the keeper —
+  // who stands behind them — on top of them from the bowling end, so from
+  // your own mark he appeared to be standing in front of the wicket.
+  add(0, 0, () => drawStumps(0, false));
+  add(PITCH_LEN, 0, () => drawStumps(PITCH_LEN, true));
   for (const p of M.field) {
-    if (p.bowler) continue;              // he is drawn running or reacting
-    add(p.chase ? p.cx : p.x, p.chase ? p.cz : p.z, () => drawFielder(p, theirShirt, labels));
+    if (p.bowler) continue;              // he is drawn running or waiting
+    add(fx(p), fz(p), () => drawFielder(p, theirShirt, labels));
   }
   add(UMPIRE_X, UMPIRE_Z, drawUmpire);
   return out;
@@ -2654,8 +2689,6 @@ function drawScene() {
   drawGround(T);
   drawSightscreen(T);
   drawCrowd(T);
-  drawStumps(0, false);
-  drawStumps(PITCH_LEN, true);
 
   const theirShirt = M.phase === 'bat' ? PAL.them : PAL.maroonLite;
   const ourShirt = M.phase === 'bat' ? PAL.maroon : PAL.them;
@@ -2664,16 +2697,21 @@ function drawScene() {
     (M.phase === 'bat' && (Bat.phase === 'ready' || Bat.phase === 'runup')));
   const actors = sceneActors(theirShirt, labels);
 
+  const atDepth = (x, z, fn) => {
+    const p = proj(x, 0, z);
+    actors.push({ d: p.behind ? 999 : p.d, fn: fn });
+  };
+
   if (M.phase === 'bat') {
     const style = Bat.bowler ? Bat.bowler.style : STYLES[0];
     if (Bat.marker) drawLengthMarker(Bat.marker.x, Bat.marker.z, PAL.gold, 0.55);
     if (Bat.phase === 'runup') {
       const q = clamp(Bat.t / Bat.runup, 0, 1);
-      actors.push({ d: 99, fn: () => drawBowlerRunup(q, theirShirt, style, false) });
+      atDepth(runupX(q, false), BOWLER_Z, () => drawBowlerRunup(q, theirShirt, style, false));
     } else if (Bat.phase === 'flight') {
-      actors.push({ d: 99, fn: () => drawBowlerRunup(1, theirShirt, style, false) });
+      atDepth(RELEASE_X, BOWLER_Z, () => drawBowlerRunup(1, theirShirt, style, false));
     } else {
-      actors.push({ d: 99, fn: () => drawBowlerReaction(M.bowlerMood, theirShirt) });
+      atDepth(REACTION_X, 0.5, () => drawBowlerReaction(M.bowlerMood, theirShirt));
     }
     if (Chase.on) actors.push({ d: 12, fn: () => Chase.draw(ourShirt) });
     else {
@@ -2695,11 +2733,13 @@ function drawScene() {
     }
     if (Bowl.phase === 'runup') {
       const q = clamp(Bowl.t / 1.6, 0, 1);
-      actors.push({ d: 1, fn: () => drawBowlerRunup(q, PAL.maroonLite, M.style, true) });
+      atDepth(runupX(q, true), BOWLER_Z, () => drawBowlerRunup(q, PAL.maroonLite, M.style, true));
     } else if (Bowl.phase === 'flight' || Bowl.phase === 'result') {
-      actors.push({ d: 1, fn: () => drawBowlerRunup(1, PAL.maroonLite, M.style, true) });
+      atDepth(RELEASE_X, BOWLER_Z, () => drawBowlerRunup(1, PAL.maroonLite, M.style, true));
     } else {
-      actors.push({ d: 1, fn: () => drawBowlerReaction(0, PAL.maroonLite) });
+      // setting your field: he is back at his mark, not standing on a length
+      const t = Bowl.t;
+      atDepth(bowlerWaitX(t), BOWLER_Z, () => drawBowlerWaiting(t, PAL.maroonLite));
     }
     actors.sort((a, b) => b.d - a.d);
     actors.forEach(a => a.fn());
