@@ -1,6 +1,6 @@
 # Grade Cricket — Concept & Design Document
 
-Single-player arcade cricket career. Stick-figure 2D, side-on. One cricketer, batting and bowling, from village club cricket to a Test cap. 10–15 seasons.
+Single-player arcade cricket career. Stick figures, drawn in perspective from behind the batter. One cricketer, batting and bowling, from village club cricket to a Test cap. 10–15 seasons.
 
 **Thesis: dominance, not accumulation.** Most cricket games reward you for staying in. This one rewards you for taking the game away from someone. The whole system stack — batting, bowling, audio, progression — is tuned to the 1970s–80s West Indian idiom: batting with disdain, bowling as intimidation. That is the house style and every mechanic below serves it.
 
@@ -165,7 +165,9 @@ Attributes improve through use. Specialists raise discipline stats faster. The a
 
 **Characters.** Single-weight limb lines, filled circle head, no face. Shirt is one colour block, pads a white band, bat a flat trapezoid, helmet a filled arc — or a cap, which is a two-shape silhouette everyone will recognise from across the room. Roughly eight shapes per figure. Chunkier torso and wider stance than the genre default so the figures read as ours.
 
-**Camera.** Fixed, side-on, slight elevation so the pitch renders as a shallow trapezoid. This is mechanical, not stylistic: pure side-on collapses leg and off into one pixel column and kills the bowling line input.
+**Camera.** Fixed behind the batter, a little above his head, looking down the pitch at the bowler. This is mechanical, not stylistic. Line and length are one read from here: the ball comes at you and grows, so where it will pitch and how high it will get are the same piece of information rather than two. Swing bends it across the frame and spin kicks it sideways, both visible because you are looking straight down the line of them. The side-on view this replaced could show neither — it collapses the ball's approach into a profile, and no amount of elevation fixes that.
+
+The cost is square of the wicket, which is off the edge of the picture. On contact the camera lifts, widens and swings on to the ball to pay it back. Your own spell is the same camera turned round: from behind the bowler's arm, with the off side correctly on the left.
 
 **The figures never gain fidelity.** No better rigs for internationals. Everything earned is expressed in the world around them, which keeps the idiom honest and the tier ladder cheap.
 
@@ -206,8 +208,8 @@ The slice answers two questions: is one over fun with no career attached, and do
 ## Five Open Questions
 
 1. **Does Swagger read as a flow state or as a power-up?** Build it both ways — a visible meter against pure animation-and-audio feedback with no bar — and test which one players describe in their own words afterward.
-2. **Does the two-tap bowling gesture survive a long spell?** Instrument ball 4 against ball 40 and measure accuracy decay and self-reported tedium.
-3. **Is the elevated side-on camera enough to read line?** The whole bowling scheme rests on it. Build the trapezoid at three angles and test line discrimination cold, no tutorial.
+2. **Does the drag-and-tap bowling gesture survive a long spell?** The scheme is down to one placement and one beat, which should hold up better than the three inputs it replaced — but the risk moves rather than disappearing: a gesture this simple can go stale instead of getting tiring. Instrument ball 4 against ball 40 and measure accuracy decay and self-reported tedium.
+3. **Does the behind-the-batter camera cost anything square of the wicket?** Answered for line: looking down the pitch makes line and length one read, and the elevated side-on view this replaced never did. The open half is what happens after contact — a cut or a pull leaves the frame, and the camera has to swing to follow it. Test whether players can tell a well-placed square shot from a lucky one, and whether the swing reads as a replay or as losing the ball.
 4. **Does the no-helmet toggle stay a real choice at the top?** If the injury risk makes cap strictly wrong internationally, the game's signature decision dies exactly where it should matter most. Tune the injury curve against observed take-up rates by tier.
 5. **How many real minutes is a season?** Find the number at which a meaningful share of players finish twelve seasons, then build the fixture list backwards from it.
 
@@ -221,19 +223,103 @@ requests, no asset files. The art is drawn and the audio is synthesised, so
 the whole game is the file. Landscape-first at a logical 1280×720,
 letterboxed; portrait shows a rotate prompt and is dismissible.
 
+**The camera is behind the batter, looking down the pitch.** A real pinhole
+projection with a yaw and a downward tilt, so the pitch converges and the ball
+comes at you and grows. Length is read by watching it rather than by reading a
+bar. Swing bends the ball across the screen before it pitches and spin kicks it
+sideways after — both are visible because you are looking straight down the
+line of them, which a side-on camera could never show. On contact the camera
+lifts, widens and swings on to the ball, so square play is still watchable;
+turn it round to `yaw = π` for your own spell and you get the view from behind
+the bowler's arm with the off side correctly on the left.
+
 **What is in.** The twenty-minute game and both meters. Batting: the six-zone
-fan, tap/hold/premeditate, the raised backlift, cap-or-helmet, Swagger with
-all three effects (stance, flourish, degraded bowler accuracy). Bowling: line
-drag, the five-band length sweep, the seam dial, the dedicated bouncer, the
-walk-back, Hostility, and composition scoring on the last two balls. Both
-tiers at Layers 1–2, the length-marker squeeze between them, the Dossier stub
-(your best scoring zone gets a fielder from island senior), the fast-forward
-of the rest of your team's innings, the selector's note, and instant restart.
+fan with continuous aim between the zones, tap/hold/premeditate, the raised
+backlift, cap-or-helmet, Swagger with all three effects (stance, flourish,
+degraded bowler accuracy). Bowling: drag a target on the pitch, one timed
+release, six styles and one variation each. Real fielding positions with
+names. A real outfield-and-throw model, so twos and threes are earned. Both
+tiers at Layers 1–2, the length-marker squeeze between them, the Dossier stub,
+the fast-forward of the rest of your team's innings, the selector's note, and
+instant restart.
 
 **Controls.** One thumb does everything: press anywhere, drag to pick the
-zone, release on the ball. Hold time is intent — tap is control, hold is
+line, release on the ball. Hold time is intent — tap is control, hold is
 attack, hold from before the bowler lets go is premeditated *and* raises the
-backlift. Keyboard is 1–6, space, M.
+backlift. Bowling is drag the target, tap BOWL, tap on the beat. Keyboard is
+1–6 aim, SPACE swing/bowl, arrows to aim your bowling, V for the variation,
+M to mute.
+
+### Bowling: one drag and one tap
+
+The three-input scheme in the first build — line drag, timed five-band length
+sweep, quarter-second seam dial — was too much to do in the time a run-up
+lasts, and the seam dial in particular was an abstraction nobody could feel.
+It is replaced by:
+
+1. **The target** — drag it anywhere on the pitch. Line and length in one
+   untimed, spatial input. It stays where you left it between balls.
+2. **The release** — one cursor, one green band, one tap. How far off the beat
+   you are is how far the ball lands from the target. Quicker styles sweep
+   faster.
+
+The walk-back input is gone; the long walk now just happens, as feedback. The
+bouncer is no longer a separate button — it is the fast bowler's variation, on
+the same one button every other style uses for theirs.
+
+**Six styles, and the difference is in the ball, not the input.**
+
+| Style | Pace | Stock | Variation | What moves |
+|---|---|---|---|---|
+| Fast | 21.4–23.6 | — | Bouncer (2 an over) | Nothing. Just pace and bounce. |
+| Swing | 19.4–21.2 | Outswinger | Inswinger | Sideways **in the air**, before it pitches |
+| Seam | 19.2–21.0 | Seam away | Seam in | **Off the pitch**, and never quite the same twice |
+| Medium pace | 17.0–18.8 | Stock | Slower ball | A little swing; the variation loops and dips |
+| Finger spin | 13.0–14.6 | Off break | Arm ball | Turns **in** to a right-hander, off the pitch |
+| Wrist spin | 11.8–13.6 | Leg break | Googly | Turns **away**. The googly does not. |
+
+Swing is a lateral acceleration applied only before the bounce; turn is a
+lateral velocity handed over only at the bounce. Both are folded into the same
+`predict()` the timing window and the AI read from, so nothing is a hidden
+die roll. You pick your style before the match and the opposition rotate four
+bowlers of their own, one over each, which is most of the variety you meet
+while batting.
+
+### Fielding positions
+
+Eleven men, in positions with names, at the angles and distances they are
+actually set: keeper, slip, gully, point, cover, extra cover, mid off, mid on,
+midwicket, square leg, backward square, short fine leg, and the deep set —
+third man, fine leg, deep point, deep cover, long off, long on, deep
+midwicket, deep square leg. Deep positions are stored as a fraction of the
+boundary so the ring stays a ring on either ground. Club is a ring with two
+saved on the rope; island adds a gully and pushes a man back. The names are
+drawn under the men before each ball, because knowing where cover is standing
+is half of knowing where to hit it.
+
+### Runs are earned, not looked up
+
+The first build decided runs from a distance table, which is why a ball rolling
+into a gap paid the same single as a push straight to cover. It now runs the
+whole sequence:
+
+- the ball keeps rolling under exponential drag;
+- every fielder is tested against every point on that path — reaction time,
+  sprint speed and about two metres of dive — and the first who can get there
+  cuts it off. Nobody can, and it is four;
+- he gathers, and throws to the nearer end at 24 m/s;
+- the batters take whatever that clock allows: 2.7s for the first run, 3.6s
+  for each one after it, because turning is the expensive part.
+
+Two and three fall out of that on their own, and the chase is played on screen
+— the fielder running it down, the throw coming back, and the two of them
+turning — compressed so the next ball is still under two seconds away.
+
+The corollary is that the ring is set at the positions the six shot names are
+taken from, so a cover drive aimed at COVER is a cover fielder's catch. The
+fan's zones therefore became a continuum: where you point *between* two names
+is where the ball goes. That is §3 Layer 2's "direction becomes which gap",
+and it costs nothing on a phone, because you were already dragging.
 
 ### Where this departs from the document
 
@@ -246,34 +332,55 @@ backlift. Keyboard is 1–6, space, M.
   correct in a two-tier slice. Here it narrows the timing window on short
   balls by 20% instead. The injury curve replaces this when the ladder
   extends.
-- **Ground size is a tier signal.** The rope is 52 m at club and 60 m at
-  island. This was needed to hit the boundary-frequency target without making
-  middled shots implausibly long, and it doubles as tier feel.
-- **The camera compromises on the near side.** Depth is compressed hard
-  toward the camera and gently away from it, because a true side-on elevation
-  puts the near rope below the screen. Leg-side gaps read less precisely than
-  off-side ones. Open question 3 is still open, and this is the build to test
-  it on.
-- **The length track is drawn as a bar under the pitch**, not painted on it.
-  Legibility beat fidelity at this resolution.
+- **Ground size and fielding sharpness are tier signals.** The rope is 54 m at
+  club and 62 m at island, and the club ring is slower off the mark and slower
+  to react. Open question 4's "the crowd gets further away" now has a
+  companion: the field gets faster.
+- **The chasing side accelerates.** The AI batter's aggression scales with the
+  required rate, so defending 80 off 30 looks nothing like defending 30. This
+  is not in the document; without it a five-over chase had no shape.
+- **No side-on camera, and open question 3 is answered rather than open.** The
+  elevated side-on view was never enough to read line — it is what the first
+  build's compressed near side was working around. Looking down the pitch
+  makes line and length one read instead of two, and the leg-side imprecision
+  the old camera had is gone.
 
-### Measured balance (400-ball samples, `docs` targets in brackets)
+### Measured balance (800-ball samples, `docs` targets in brackets)
 
-| Situation | Boundary every | Dismissals |
-|---|---|---|
-| Club, new player (140 ms timing spread) | 4.1 balls [5–6] | 3.3% |
-| Club, competent (60 ms), ideal shot choice | 1.7 balls | 1.0% |
-| Island, competent (60 ms) | 5.3 balls | 1.0% |
+Batting, by how well the player times *and* places:
 
-Bowling, per 24 balls: an accurate spell concedes 8.2 an over and takes 2.9;
-at full Hostility that becomes **4.2 an over and 3.3 wickets**. A sloppy spell
-concedes 10.3 and takes 1.8. Both levers are legible from the scorecard,
-which is the point of the meter.
+| Situation | Boundary every | Dot | 1s | 2s | Out |
+|---|---|---|---|---|---|
+| Club, new player (140 ms, aims down the middle) | 5.6 balls [5–6] | 50% | 21% | 4% | 8.3% |
+| Club, competent (60 ms, aims down the middle) | 2.6 balls | 33% | 18% | 5% | 5.3% |
+| Club, competent (60 ms), picks the gap | 2.2 balls | 22% | 21% | 6% | 5.0% |
+| Island, competent (60 ms), picks the gap | 7.7 balls | 33% | 31% | 22% | 1.5% |
+| Island, expert (35 ms), picks the gap | 3.5 balls | 21% | 30% | 20% | 0.0% |
 
 The club tier is generous against target on purpose — the document asks the
-bottom of the ladder to be, and the ladder is what takes it away. The
-club-to-island shock (1.7 → 5.3) is the first-over perceptual jump §4 asks
-for.
+bottom of the ladder to be. The club-to-island shock (2.2 → 7.7) is the
+first-over perceptual jump §4 asks for, and it now lands in the run
+distribution rather than only in the boundary count: at island you are pushed
+into working the gaps for twos.
+
+Bowling, per over, at club:
+
+| Style | Accurate | Sloppy |
+|---|---|---|
+| Fast | 2.1 runs, 2.6 wkts/24 | 4.0 runs, 1.7 wkts/24 |
+| Swing | 2.5 runs, 2.1 wkts/24 | 3.2 runs, 1.8 wkts/24 |
+| Seam | 2.4 runs, 1.7 wkts/24 | 3.8 runs, 1.4 wkts/24 |
+| Medium | 2.7 runs, 2.5 wkts/24 | 3.8 runs, 1.9 wkts/24 |
+| Finger spin | 2.9 runs, 1.0 wkts/24 | 6.0 runs, 0.8 wkts/24 |
+| Wrist spin | 2.6 runs, 1.2 wkts/24 | 6.3 runs, 1.5 wkts/24 |
+
+Pace takes wickets; spin is cheap when you land it and expensive when you do
+not. Defending a target sharpens all of it — asked for 16 an over they come at
+you, and an accurate spell holds them to 6.3 and takes 6.4 wickets in five
+overs while a sloppy one concedes 9.6.
+
+Every figure above comes from driving the shipped `Bat` and `Bowl` state
+machines with a scripted thumb, not from a separate model.
 
 ### Not built
 
