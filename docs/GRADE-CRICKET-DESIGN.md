@@ -354,6 +354,14 @@ not, all of which the second pass added:
   hand and barely moves before it accelerates (170° → 157° → 48°), where a
   cover drive swings evenly through the same span (176° → 145° → 65°).
 
+**The batters are side on.** They were drawn on the facing rig, square to the
+camera, which is not how anybody stands at a crease. All four — striker,
+non-striker, the batter you bowl at and the two of them running — now use the
+side rig. From behind the striker the off side is to the right so he turns
+that way, and the swing table's angles are already screen angles, so they
+carry straight over. At the other end the camera has the off side on the left,
+so that batter is the same rig mirrored and his cut still goes to the off.
+
 The feet are no longer level, the chest opens through the leg-side shots, and
 Swagger changes the stance rather than only the meter: the taps slow from
 about one and a half a second to under one, the bat rides higher between
@@ -410,6 +418,15 @@ Audited over 2,100 balls of deliberate slogging across both tiers: every
 dismissal given as caught was taken by a named fielder, and the furthest the
 ball ever moved into his hands was 2.46 m — inside a dive. Fielders ran an
 average of 6 m for their catches and as much as 14.6 m.
+
+The bowler is the exception that had to be written down. He is one of the
+eleven, but he is drawn by his run-up rather than by the fielding code, so he
+was skipped when the field was drawn — and a caught and bowled left the ball
+hanging in mid-air a few metres from a bowler standing in his follow-through.
+He now drops out of the run-up and into the field the moment he is the one
+taking the catch or chasing the ball, and his fielding station moved to where
+a follow-through actually leaves him, which is the only place a caught and
+bowled can plausibly happen.
 
 Two more that used to happen only in the scoreboard:
 

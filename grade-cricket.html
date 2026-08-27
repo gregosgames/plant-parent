@@ -1256,9 +1256,11 @@ function buildField(tier, dossier) {
   f.push(keeper);
 
   // the bowler, in his follow-through, is the eleventh man
-  // he ends his follow-through somewhere near mid-off, and fields from there
-  const bowler = { key: 'bowler', name: 'BOWLER', bowler: true, a: -12, r: 17,
-                   x: CONTACT_X - Math.cos(deg(-12)) * 17, z: -Math.sin(deg(-12)) * 17,
+  // He fields from where his follow-through leaves him, a few strides down
+  // the pitch and slightly to the off — which is also the only place a
+  // caught and bowled can plausibly happen.
+  const bowler = { key: 'bowler', name: 'BOWLER', bowler: true, a: -7, r: 15.5,
+                   x: CONTACT_X - Math.cos(deg(-7)) * 15.5, z: -Math.sin(deg(-7)) * 15.5,
                    chase: 0 };
   bowler.hx = bowler.x; bowler.hz = bowler.z;
   f.push(bowler);
@@ -1547,12 +1549,14 @@ const Chase = {
     const a = lerp(CREASE_X - 0.3, FAR_CREASE_X + 0.3, flip ? 1 - frac : frac);
     const b = lerp(FAR_CREASE_X + 0.3, CREASE_X - 0.3, flip ? 1 - frac : frac);
     const cyc = Math.sin(this.t * 15) * 26;
-    const one = { view: 'facing', shirt: shirt, pads: true, cap: 'helmet', bat: true,
-                  batAng: 62, scale: 0.96, legL: 14 + cyc, legR: 14 - cyc,
-                  armL: 34 - cyc * 0.6, armR: 34 + cyc * 0.6, lean: 1.4 };
+    const one = { view: 'side', face: flip ? 1 : -1, shirt: shirt, pads: true,
+                  cap: 'helmet', bat: true, batAng: 62, scale: 0.96,
+                  legF: 16 + cyc, legB: -16 + cyc,
+                  armF: 34 - cyc * 0.6, armB: 24 + cyc * 0.6, lean: 1.6 };
     Art.shadow(a, -1.25, 0.4, 0.2); Art.shadow(b, 1.25, 0.4, 0.2);
     drawFigure(a, -1.25, one);
-    drawFigure(b, 1.25, Object.assign({}, one, { legL: 14 - cyc, legR: 14 + cyc, cap: 'cap' }));
+    drawFigure(b, 1.25, Object.assign({}, one, { face: flip ? -1 : 1,
+                                                 legF: 16 - cyc, legB: -16 - cyc, cap: 'cap' }));
   },
 };
 
@@ -2577,12 +2581,13 @@ const STRIKER_X = CREASE_X + 0.45, STRIKER_Z = -0.72;
    the line, out the far side, and held there. The hold is the point — a
    stroke you watch finish reads as a stroke, and a bat that snaps back to
    the stance reads as a sprite. */
-function strikerPose(zone, swingT, info, shirt, cap, viewBack) {
+function strikerPose(zone, swingT, info, shirt, cap, face) {
   const sw = M.swagger;
+  const viewBack = face > 0;             // the striker; the other end mirrors
   const o = {
-    view: viewBack ? 'back' : 'front', shirt: shirt, pads: true, bat: true, cap: cap,
-    legL: STANCE.legFront + sw * 3, legR: STANCE.legBack - sw * 2,
-    armL: 26, armR: 30, lean: -0.6 + sw * 1.6, crouch: 0, tilt: 0,
+    view: 'side', face: face, shirt: shirt, pads: true, bat: true, cap: cap,
+    legF: STANCE.legFront + sw * 3, legB: -STANCE.legBack - sw * 2,
+    armF: 34, armB: 24, lean: -0.6 + sw * 1.6, crouch: 0,
     batAng: 16, blur: 0, zone: zone, stride: 0,
   };
 
@@ -2594,8 +2599,6 @@ function strikerPose(zone, swingT, info, shirt, cap, viewBack) {
     const ph = (now() * rate) % 1;
     const tap = ph < 0.18 ? Math.sin(ph / 0.18 * Math.PI) * 15 : 0;
     o.batAng = 14 + sw * 20 + tap;
-    // he stops watching the bowler between balls
-    if (sw > 0.55) o.tilt = -1.4 * (sw - 0.55) / 0.45;
 
     if (viewBack) {
       // the trigger: a small press back and across as the bowler loads up,
@@ -2607,16 +2610,16 @@ function strikerPose(zone, swingT, info, shirt, cap, viewBack) {
       if (load > 0) {
         const e = load * load * (3 - 2 * load);
         o.batAng = lerp(o.batAng, STANCE.pickup, e);
-        o.armL = lerp(o.armL, 40, e);
-        o.armR = lerp(o.armR, 46, e);
+        o.armF = lerp(o.armF, 48, e);
+        o.armB = lerp(o.armB, 38, e);
         o.crouch = e * 0.45;
         o.lean = lerp(o.lean, -1.5, e);
         o.stride = -e * 0.14;            // back and across
-        o.legL = lerp(o.legL, STANCE.legFront + 5, e);
+        o.legB = lerp(o.legB, -STANCE.legBack - 6, e);
       }
       // committing early lifts it higher still, which is the tell
       if (Input.charging() && Bat.phase !== 'result') {
-        o.batAng = STANCE.pickupHeld; o.armL = 46; o.armR = 52; o.lean = -1.9;
+        o.batAng = STANCE.pickupHeld; o.armF = 54; o.armB = 44; o.lean = -1.9;
       }
     }
     return o;
@@ -2647,14 +2650,13 @@ function strikerPose(zone, swingT, info, shirt, cap, viewBack) {
   o.batAng = ang;
   o.lean = lerp(o.lean, A.lean + (beaten ? -1.8 : 0), w);
   o.crouch = A.crouch * w;
-  o.tilt = (beaten ? -2.2 : A.open * 0.5) * w;
-  // the hands travel with the bat, and the chest opens through the shot
-  o.armL = lerp(26, A.back ? 44 : 62, w);
-  o.armR = lerp(30, A.back ? 54 : 72, w);
-  // the legs: a front-foot shot strides into it, a back-foot one rocks back
-  // and drops, and the back leg comes round as the hips open
-  o.legL = STANCE.legFront + (A.back ? 16 : -7) * w;
-  o.legR = STANCE.legBack + (A.back ? -4 : 26) * w + A.open * 4 * w;
+  // both hands stay on the handle and travel with it
+  o.armF = lerp(34, A.back ? 52 : 74, w);
+  o.armB = lerp(24, A.back ? 42 : 62, w);
+  // the front leg strides into a front-foot shot; a back-foot one plants the
+  // back leg and drops on to it, and the hips open through both
+  o.legF = STANCE.legFront + (A.back ? -10 : 20) * w;
+  o.legB = -STANCE.legBack - (A.back ? 17 : 5) * w - A.open * 3 * w;
   // and he actually moves: the stride is a metre of pitch, not a lean
   o.stride = A.stride * w;
   return o;
@@ -2664,16 +2666,22 @@ function strikerPose(zone, swingT, info, shirt, cap, viewBack) {
    than a stick that teleported. */
 function drawBatBlur(anchors, o) {
   if (!anchors || o.blur < 0.06) return;
+  const dir = o.view === 'side' ? o.face : 1;
   for (let i = 1; i <= 3; i++) {
     ctx.globalAlpha = 0.22 * o.blur * (4 - i) / 3;
-    drawBat(anchors.handR, o.batAng + i * 19, anchors.H, 1, '#efe3c0');
+    drawBat(anchors.handF, o.batAng + i * 19, anchors.H, dir, '#efe3c0');
   }
   ctx.globalAlpha = 1;
 }
 
+/* Side on, as a batter stands. From behind the striker the off side is to
+   the right, so he turns that way and the swing table's angles — which are
+   already screen angles — carry straight over. At the other end the camera
+   has the off side on the left, so that batter is the same rig mirrored, and
+   his cut still goes to the off. */
 function drawStriker() {
   const o = strikerPose(Bat.zone, Bat.swung ? Bat.swingT : -1, Bat.swingInfo,
-                        PAL.maroon, M.gear === 'cap' ? 'cap' : 'helmet', true);
+                        PAL.maroon, M.gear === 'cap' ? 'cap' : 'helmet', 1);
   const x = STRIKER_X - o.stride;        // down the pitch is decreasing x
   Art.shadow(x, STRIKER_Z, 0.44, 0.26);
   drawBatBlur(drawFigure(x, STRIKER_Z, o), o);
@@ -2688,15 +2696,15 @@ function drawFacingBatter() {
   Art.shadow(STRIKER_X, STRIKER_Z, 0.44, 0.26);
   if (fl) {
     drawFigure(STRIKER_X, STRIKER_Z, {
-      view: 'front', shirt: PAL.them, pads: true, bat: true, cap: 'helmet',
-      legL: 30, legR: 8, armL: -150, armR: 140, lean: -2.4, crouch: 1.6, batAng: -150,
+      view: 'side', face: -1, shirt: PAL.them, pads: true, bat: true, cap: 'helmet',
+      legF: 8, legB: -34, armF: 150, armB: 140, lean: -2.4, crouch: 1.6, batAng: -150,
     });
     return;
   }
   const played = Bowl.ai && Bowl.ai.played && Bowl.aiSwingT > 0;
   const o = strikerPose(played ? Bowl.ai.zone : 2, played ? Bowl.aiSwingT : -1,
                         played ? { quality: Bowl.aiQuality } : null,
-                        PAL.them, 'helmet', false);
+                        PAL.them, 'helmet', -1);
   if (!played) o.lean = -0.4 + M.batterConf * 1.2;
   const x = STRIKER_X - o.stride;
   drawBatBlur(drawFigure(x, STRIKER_Z, o), o);
@@ -2727,9 +2735,9 @@ function drawNonStriker(shirt) {
   const x = FAR_CREASE_X - 0.3 + back * 1.9;
   Art.shadow(x, NONSTRIKER_Z, 0.4, 0.2);
   drawFigure(x, NONSTRIKER_Z, {
-    view: 'front', shirt: shirt, pads: true, bat: true, cap: 'cap',
-    legL: 15 + back * 9, legR: 15 - back * 5,
-    armL: 24, armR: 26, batAng: 22, lean: back * 0.9, scale: 0.98,
+    view: 'side', face: 1, shirt: shirt, pads: true, bat: true, cap: 'cap',
+    legF: 15 + back * 16, legB: -15 - back * 4,
+    armF: 28, armB: 20, batAng: 22, lean: back * 1.2, scale: 0.98,
   });
 }
 
@@ -2805,7 +2813,12 @@ function sceneActors(theirShirt, labels) {
   add(0, 0, () => drawStumps(0, false));
   add(PITCH_LEN, 0, () => drawStumps(PITCH_LEN, true));
   for (const p of M.field) {
-    if (p.bowler) continue;              // he is drawn running or waiting
+    // The bowler is normally drawn by his run-up, so he is skipped here —
+    // but the moment he is the one taking the catch or chasing the ball he
+    // has to be drawn where the ball is, not where his run-up ended. Without
+    // this a caught and bowled left the ball hanging in mid-air three metres
+    // from a bowler who was standing in his follow-through.
+    if (p.bowler && !p.taking && !p.chase) continue;
     add(fx(p), fz(p), () => drawFielder(p, theirShirt, labels));
   }
   add(UMPIRE_X, UMPIRE_Z, drawUmpire);
@@ -2829,11 +2842,15 @@ function drawScene() {
     const p = proj(x, 0, z);
     actors.push({ d: p.behind ? 999 : p.d, fn: fn });
   };
+  // ...and when he is, the run-up figure stands down so there is only one of him
+  const bowlerFielding = M.field.some(p => p.bowler && (p.taking || p.chase));
 
   if (M.phase === 'bat') {
     const style = Bat.bowler ? Bat.bowler.style : STYLES[0];
     if (Bat.marker) drawLengthMarker(Bat.marker.x, Bat.marker.z, PAL.gold, 0.55);
-    if (Bat.phase === 'runup') {
+    if (bowlerFielding) {
+      /* he is in the actor list already */
+    } else if (Bat.phase === 'runup') {
       const q = clamp(Bat.t / Bat.runup, 0, 1);
       atDepth(runupX(q, false), BOWLER_Z, () => drawBowlerRunup(q, theirShirt, style, false));
     } else if (Bat.phase === 'flight') {
@@ -2859,7 +2876,9 @@ function drawScene() {
       actors.push({ d: proj(STRIKER_X, 0, STRIKER_Z).d, fn: drawFacingBatter });
       actors.push({ d: 60, fn: () => drawNonStriker(theirShirt) });
     }
-    if (Bowl.phase === 'runup') {
+    if (bowlerFielding) {
+      /* he is in the actor list already */
+    } else if (Bowl.phase === 'runup') {
       const q = clamp(Bowl.t / 1.6, 0, 1);
       atDepth(runupX(q, true), BOWLER_Z, () => drawBowlerRunup(q, PAL.maroonLite, M.style, true));
     } else if (Bowl.phase === 'flight' || Bowl.phase === 'result') {
