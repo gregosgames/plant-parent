@@ -244,7 +244,7 @@ the fast-forward of the rest of your team's innings, the selector's note, and
 instant restart.
 
 **Controls.** One thumb does everything: press anywhere, drag to pick the
-line, release on the ball. Hold time is intent — tap is control, hold is
+line, release on the ball. The pick-up rises the moment you press. Hold time is intent — tap is control, hold is
 attack, hold from before the bowler lets go is premeditated *and* raises the
 backlift. Bowling is drag the target, tap BOWL, tap on the beat. Keyboard is
 1–6 aim, SPACE swing/bowl, arrows to aim your bowling, V for the variation,
@@ -320,6 +320,54 @@ taken from, so a cover drive aimed at COVER is a cover fielder's catch. The
 fan's zones therefore became a continuum: where you point *between* two names
 is where the ball goes. That is §3 Layer 2's "direction becomes which gap",
 and it costs nothing on a phone, because you were already dragging.
+
+### The shot is an animation, not a caption
+
+Each of the six zones has a keyframed swing: a high pick-up, a downswing to
+its own contact angle, a follow-through to its own finish, and a hold. The
+swing always rotates the same way — from over the shoulder, down through the
+line, and out the far side — because that is the direction a right-hander's
+bat actually travels; only where it stops differs, and that is what tells the
+shots apart. A cut is a quarter turn dying at waist height off the back foot.
+A straight drive is most of a half turn off the front foot finishing above the
+shoulder and held for well over half a second. The bat is drawn back along its
+own arc during the downswing so a middled shot reads as a wedge rather than a
+stick that teleported, and being beaten over-rotates the finish.
+
+The idiom is §1's: the pick-up is very high and comes up the moment the player
+commits, the bat comes down from over the shoulder rather than from behind the
+pad, and the follow-through is allowed to finish and then be held. Archetype,
+not portrait — what is lifted is the shape of the movement and nothing else.
+The AI batter you bowl at plays off the same table, so his shots read too.
+
+### Somebody catches it
+
+Three things used to happen only in the scoreboard. Now:
+
+- **A catch is taken.** The ball snaps into the fielder's hands, his arms go
+  up or out depending on how high it came, he settles it into his chest, and
+  the camera swings on to him. Measured over a stress sample, the taker is on
+  screen and holding the ball on every catch.
+- **The keeper takes what you leave.** A ball left alone or beaten used to
+  sail on out of the ground with nobody behind the stumps. It now ends in the
+  gloves, every time.
+- **Bowled is judged at the stumps.** The check used to read the ball's
+  position several metres past them, after swing and spin had carried it
+  somewhere else. It now records what the ball was doing as it crossed the
+  stumps and judges that.
+
+The keeper is also drawn during your innings. He stands between the lens and
+the batter, which is why the first build culled him — and why the scene is now
+drawn back to front, each figure queued with its own distance from the lens,
+rather than in a fixed order that put whoever was written last on top.
+
+### The non-striker is out of the way
+
+He was standing at z = +1.15, on the off side of the bowler's stumps, which is
+the lane a right-arm-over bowler runs and releases through — so every delivery
+went through him. He now stands on the other side, two metres clear of the
+arm, and backs up as the ball is released. The umpire had the same problem and
+has moved a step to the leg side of the bowler's stumps.
 
 ### Where this departs from the document
 
