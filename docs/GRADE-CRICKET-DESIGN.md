@@ -210,3 +210,80 @@ The slice answers two questions: is one over fun with no career attached, and do
 3. **Is the elevated side-on camera enough to read line?** The whole bowling scheme rests on it. Build the trapezoid at three angles and test line discrimination cold, no tutorial.
 4. **Does the no-helmet toggle stay a real choice at the top?** If the injury risk makes cap strictly wrong internationally, the game's signature decision dies exactly where it should matter most. Tune the injury curve against observed take-up rates by tier.
 5. **How many real minutes is a season?** Find the number at which a meaningful share of players finish twelve seasons, then build the fixture list backwards from it.
+
+---
+
+## Implementation — `grade-cricket.html`
+
+The playable slice of §0–§2, built for a browser-and-mobile portal release
+(CrazyGames). One self-contained HTML file: no build step, no external
+requests, no asset files. The art is drawn and the audio is synthesised, so
+the whole game is the file. Landscape-first at a logical 1280×720,
+letterboxed; portrait shows a rotate prompt and is dismissible.
+
+**What is in.** The twenty-minute game and both meters. Batting: the six-zone
+fan, tap/hold/premeditate, the raised backlift, cap-or-helmet, Swagger with
+all three effects (stance, flourish, degraded bowler accuracy). Bowling: line
+drag, the five-band length sweep, the seam dial, the dedicated bouncer, the
+walk-back, Hostility, and composition scoring on the last two balls. Both
+tiers at Layers 1–2, the length-marker squeeze between them, the Dossier stub
+(your best scoring zone gets a fielder from island senior), the fast-forward
+of the rest of your team's innings, the selector's note, and instant restart.
+
+**Controls.** One thumb does everything: press anywhere, drag to pick the
+zone, release on the ball. Hold time is intent — tap is control, hold is
+attack, hold from before the bowler lets go is premeditated *and* raises the
+backlift. Keyboard is 1–6, space, M.
+
+### Where this departs from the document
+
+- **The flourish has no dedicated modifier button.** It fires on a full meter
+  plus a premeditated release, because a separate modifier costs a second
+  thumb on a phone. The risk/reward is unchanged: mistime it and the cone
+  roughly doubles.
+- **The cap costs something at club level.** The document puts the injury
+  outcome at representative level and up, which would make the cap strictly
+  correct in a two-tier slice. Here it narrows the timing window on short
+  balls by 20% instead. The injury curve replaces this when the ladder
+  extends.
+- **Ground size is a tier signal.** The rope is 52 m at club and 60 m at
+  island. This was needed to hit the boundary-frequency target without making
+  middled shots implausibly long, and it doubles as tier feel.
+- **The camera compromises on the near side.** Depth is compressed hard
+  toward the camera and gently away from it, because a true side-on elevation
+  puts the near rope below the screen. Leg-side gaps read less precisely than
+  off-side ones. Open question 3 is still open, and this is the build to test
+  it on.
+- **The length track is drawn as a bar under the pitch**, not painted on it.
+  Legibility beat fidelity at this resolution.
+
+### Measured balance (400-ball samples, `docs` targets in brackets)
+
+| Situation | Boundary every | Dismissals |
+|---|---|---|
+| Club, new player (140 ms timing spread) | 4.1 balls [5–6] | 3.3% |
+| Club, competent (60 ms), ideal shot choice | 1.7 balls | 1.0% |
+| Island, competent (60 ms) | 5.3 balls | 1.0% |
+
+Bowling, per 24 balls: an accurate spell concedes 8.2 an over and takes 2.9;
+at full Hostility that becomes **4.2 an over and 3.3 wickets**. A sloppy spell
+concedes 10.3 and takes 1.8. Both levers are legible from the scorecard,
+which is the point of the meter.
+
+The club tier is generous against target on purpose — the document asks the
+bottom of the ladder to be, and the ladder is what takes it away. The
+club-to-island shock (1.7 → 5.3) is the first-over perceptual jump §4 asks
+for.
+
+### Not built
+
+Everything §3 Layer 3 and up, the full Dossier, career, selection, seasons,
+the Ledger, T20 and multi-day, injuries. The slice exists to answer the two
+questions the MVP section asks, and nothing else.
+
+### Portal integration
+
+`Portal` is a guarded shim around the CrazyGames SDK — `loadingStart`,
+`loadingStop`, `gameplayStart`, `gameplayStop`, `happytime`. Every call is
+wrapped, so the build behaves identically with the SDK absent. To ship, add
+the SDK script tag; nothing else changes.
