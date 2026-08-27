@@ -354,7 +354,21 @@ not, all of which the second pass added:
   hand and barely moves before it accelerates (170° → 157° → 48°), where a
   cover drive swings evenly through the same span (176° → 145° → 65°).
 
-**The batters are side on.** They were drawn on the facing rig, square to the
+**The stance, read off the behind-the-arm view.** Three things a reference
+frame makes obvious that a keyframed arc does not:
+
+- **A batter is a narrow shape.** Feet close together and side on, 15° and 9°
+  off the vertical rather than the 21°/13° splay the first pass used, which
+  read as somebody bracing for a tackle.
+- **The bat is grounded.** In the stance the toe rests on the turf behind the
+  back foot at about 22°, not hanging in space.
+- **The pick-up is wrists, not arms.** The hands sit at hip height — 49% of
+  his own height — and stay there: 49% in the stance, 50% at the trigger, 52%
+  at a premeditated pick-up. Over the same span the bat toe travels from 6%
+  of his height to 96%, up over his head. Lifting the arms with the bat was
+  what made the first pass look like somebody raising an axe.
+
+**And they are side on.** They were drawn on the facing rig, square to the
 camera, which is not how anybody stands at a crease. All four — striker,
 non-striker, the batter you bowl at and the two of them running — now use the
 side rig. From behind the striker the off side is to the right so he turns

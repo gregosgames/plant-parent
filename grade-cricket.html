@@ -161,9 +161,19 @@ const SWING_THROUGH = 0.20;              // contact to the end of the follow-thr
    `PICKUP` is how high the bat rides on an ordinary ball. Holding the input
    raises it further and earlier, which is still the premeditation tell. */
 const STANCE = {
-  legFront: 21, legBack: 13,             // feet apart, not level
-  pickup: 166,                           // where the bat rides as he loads
-  pickupHeld: 178,                       // and where it rides if you commit early
+  // Feet close together and side on, not splayed. A batter at the crease is
+  // a narrow shape; the splayed stance the first pass used reads as somebody
+  // bracing for a tackle.
+  legFront: 15, legBack: 9,
+  crouch: 0.35,                          // knees flexed and bent at the waist
+  batRest: 22,                           // toe grounded, angled back past the back foot
+  // Hands low and close to the body, roughly hip height, and they stay there:
+  // the pick-up is cocked from the wrists, so the bat travels a long way and
+  // the hands barely move. Lifting the arms with it was the thing that made
+  // the first pass look like somebody raising an axe.
+  handFront: 30, handBack: 21, handLift: 7,
+  pickup: 164,                           // high, and back toward the slips
+  pickupHeld: 178,                       // higher still if you commit early
   trigger: 0.30,                         // seconds of press before release
   tapEvery: 1.55,                        // bat taps per second at zero Swagger
 };
@@ -2587,8 +2597,9 @@ function strikerPose(zone, swingT, info, shirt, cap, face) {
   const o = {
     view: 'side', face: face, shirt: shirt, pads: true, bat: true, cap: cap,
     legF: STANCE.legFront + sw * 3, legB: -STANCE.legBack - sw * 2,
-    armF: 34, armB: 24, lean: -0.6 + sw * 1.6, crouch: 0,
-    batAng: 16, blur: 0, zone: zone, stride: 0,
+    armF: STANCE.handFront, armB: STANCE.handBack,
+    lean: -0.6 + sw * 1.6, crouch: STANCE.crouch,
+    batAng: STANCE.batRest, blur: 0, zone: zone, stride: 0,
   };
 
   const t = swingT > 0 ? now() - swingT : -1;
@@ -2598,7 +2609,7 @@ function strikerPose(zone, swingT, info, shirt, cap, face) {
     const rate = STANCE.tapEvery * (1 - sw * 0.45);
     const ph = (now() * rate) % 1;
     const tap = ph < 0.18 ? Math.sin(ph / 0.18 * Math.PI) * 15 : 0;
-    o.batAng = 14 + sw * 20 + tap;
+    o.batAng = STANCE.batRest + sw * 18 + tap;
 
     if (viewBack) {
       // the trigger: a small press back and across as the bowler loads up,
@@ -2610,16 +2621,19 @@ function strikerPose(zone, swingT, info, shirt, cap, face) {
       if (load > 0) {
         const e = load * load * (3 - 2 * load);
         o.batAng = lerp(o.batAng, STANCE.pickup, e);
-        o.armF = lerp(o.armF, 48, e);
-        o.armB = lerp(o.armB, 38, e);
-        o.crouch = e * 0.45;
+        o.armF = STANCE.handFront + STANCE.handLift * e;
+        o.armB = STANCE.handBack + STANCE.handLift * e;
+        o.crouch = STANCE.crouch + e * 0.35;
         o.lean = lerp(o.lean, -1.5, e);
         o.stride = -e * 0.14;            // back and across
-        o.legB = lerp(o.legB, -STANCE.legBack - 6, e);
+        o.legB = lerp(o.legB, -STANCE.legBack - 5, e);
       }
       // committing early lifts it higher still, which is the tell
       if (Input.charging() && Bat.phase !== 'result') {
-        o.batAng = STANCE.pickupHeld; o.armF = 54; o.armB = 44; o.lean = -1.9;
+        o.batAng = STANCE.pickupHeld;
+        o.armF = STANCE.handFront + STANCE.handLift * 1.8;
+        o.armB = STANCE.handBack + STANCE.handLift * 1.8;
+        o.lean = -1.9;
       }
     }
     return o;
@@ -2641,7 +2655,7 @@ function strikerPose(zone, swingT, info, shirt, cap, face) {
     o.blur = 1 - p;
   } else {
     const rel = clamp((t - SWING_DOWN - SWING_THROUGH - A.hold) / 0.30, 0, 1);
-    ang = lerp(finish, 16 + sw * 20, rel * rel);
+    ang = lerp(finish, STANCE.batRest + sw * 18, rel * rel);
   }
 
   const k = clamp(t / (SWING_DOWN + SWING_THROUGH), 0, 1);
@@ -2649,10 +2663,10 @@ function strikerPose(zone, swingT, info, shirt, cap, face) {
   const w = k * (1 - settle);            // how far into the stroke he still is
   o.batAng = ang;
   o.lean = lerp(o.lean, A.lean + (beaten ? -1.8 : 0), w);
-  o.crouch = A.crouch * w;
-  // both hands stay on the handle and travel with it
-  o.armF = lerp(34, A.back ? 52 : 74, w);
-  o.armB = lerp(24, A.back ? 42 : 62, w);
+  o.crouch = lerp(STANCE.crouch, A.crouch, w);
+  // the hands finally leave the hip: through the ball the arms extend
+  o.armF = lerp(STANCE.handFront, A.back ? 52 : 74, w);
+  o.armB = lerp(STANCE.handBack, A.back ? 42 : 62, w);
   // the front leg strides into a front-foot shot; a back-foot one plants the
   // back leg and drops on to it, and the hips open through both
   o.legF = STANCE.legFront + (A.back ? -10 : 20) * w;
