@@ -334,11 +334,59 @@ shoulder and held for well over half a second. The bat is drawn back along its
 own arc during the downswing so a middled shot reads as a wedge rather than a
 stick that teleported, and being beaten over-rotates the finish.
 
-The idiom is §1's: the pick-up is very high and comes up the moment the player
-commits, the bat comes down from over the shoulder rather than from behind the
-pad, and the follow-through is allowed to finish and then be held. Archetype,
-not portrait — what is lifted is the shape of the movement and nothing else.
-The AI batter you bowl at plays off the same table, so his shots read too.
+Four things the reference batting of §1 has that a keyframed arc alone does
+not, all of which the second pass added:
+
+- **The trigger.** A small press back and across in the last third of a
+  second of the run-up, with the bat rising as the bowler loads.
+- **The pick-up happens every ball.** It used to come up only when you held
+  the input. Now it rides to about 166° as a matter of course and holding
+  takes it higher and earlier — so premeditation is still legible, but as
+  *more* of something that always happens rather than as the only time he
+  looks like a batter.
+- **He strides.** A front-foot shot moves him up to 0.70 m down the pitch and
+  a back-foot one rocks him back a third of a metre. This is a real change of
+  world position, so it foreshortens correctly; it is presentation only, and
+  contact is still resolved at a fixed point, because moving that would
+  re-time every window in the game.
+- **The bat snaps late where it should.** Each shot carries a `whip`
+  exponent on the downswing: a flick through midwicket is nearly all bottom
+  hand and barely moves before it accelerates (170° → 157° → 48°), where a
+  cover drive swings evenly through the same span (176° → 145° → 65°).
+
+The feet are no longer level, the chest opens through the leg-side shots, and
+Swagger changes the stance rather than only the meter: the taps slow from
+about one and a half a second to under one, the bat rides higher between
+balls, the stance opens, and past 55% he stops turning his head to watch the
+bowler. That is §1's Presence, and it costs nothing mechanically.
+
+Archetype, not portrait — what is lifted is the shape of the movement and
+nothing else. The AI batter you bowl at plays off the same table, so his shots
+read too.
+
+### The 1980s pass
+
+The presentation was period-neutral. It now commits:
+
+- **Mown stripes** down the length of the ground, so they converge away from
+  you toward the bowler. Sixteen quads, clipped to the rope. This is the
+  single most 1980s thing on the screen.
+- **Advertising boards** around the boundary — flat colour blocks a metre
+  high, which is what a ground looked like before video hoardings, and which
+  also hide the seam between the outfield and whatever is beyond it.
+- **Kit.** A broad band across the chest and a wide collar, in the coloured
+  clothing of the era. Two shapes out of the eight-shape budget, spent on
+  saying which decade this is.
+- **A caption-generator scorebar.** Hard rectangles, no rounded corners, no
+  gradients, two flat colours, a rule between the cells and a hard drop
+  shadow — the way a 1983 outside broadcast built one.
+- **The broadcast pass.** Scanlines from a four-pixel pattern, a soft
+  vignette, and a warm cast, composited over the finished frame. Kept
+  deliberately light: every one of those is a veil over the thing you are
+  trying to time, so the point is that it reads as period, not that it reads
+  as broken.
+- **A period colour grade** — a yellower grass, a paler warmer sky, cream
+  instead of white.
 
 ### A catch is a man getting to the ball
 
@@ -413,6 +461,12 @@ has moved a step to the leg side of the bowler's stumps.
 - **The chasing side accelerates.** The AI batter's aggression scales with the
   required rate, so defending 80 off 30 looks nothing like defending 30. This
   is not in the document; without it a five-over chase had no shape.
+- **The UI has a panel, and the picture has a grade.** The document asks for
+  chunky numerals with no panels and for high chroma. A caption box and a
+  slightly veiled picture are the two things the period actually requires, so
+  both are in — but the box behaves like poster type, holding nothing but the
+  score at a size that reads across a room, and the grade is light enough to
+  time a ball through.
 - **No side-on camera, and open question 3 is answered rather than open.** The
   elevated side-on view was never enough to read line — it is what the first
   build's compressed near side was working around. Looking down the pitch

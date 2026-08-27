@@ -126,21 +126,47 @@ const SHOTS = [
    `back` is a back-foot shot: he rocks back and drops, rather than striding
    into it. */
 const SHOT_ANIM = [
-  // CUT — back and across, bat horizontal at contact, hands roll it down
-  { lift: 176, contact:  95, finish:   28, back: true,  crouch: 0.7, lean:  1.0, hold: 0.26 },
-  // COVER — full stride, high elbow, bat finishing above the far shoulder
-  { lift: 172, contact:  30, finish: -138, back: false, crouch: 0.0, lean:  2.9, hold: 0.52 },
-  // STRAIGHT — the biggest arc of the six, and the longest held
-  { lift: 178, contact:  10, finish: -172, back: false, crouch: 0.0, lean:  2.4, hold: 0.58 },
-  // WHIP — off the toes through midwicket, wrists doing the work
-  { lift: 168, contact: -28, finish: -150, back: false, crouch: 0.1, lean:  1.7, hold: 0.42 },
-  // PULL — rocks back, swings flat, bat finishes round the shoulder
-  { lift: 184, contact: -58, finish: -168, back: true,  crouch: 1.0, lean: -0.7, hold: 0.48 },
+  // CUT — rocks back and across, bat horizontal at contact, hands roll it down
+  { lift: 178, contact:  95, finish:   28, back: true,  crouch: 0.8, lean:  1.0,
+    hold: 0.30, stride: -0.30, whip: 2.0, open: 1.3 },
+  // COVER — full stride, high elbow, bat finishing above the far shoulder and held
+  { lift: 176, contact:  30, finish: -140, back: false, crouch: 0.0, lean:  3.1,
+    hold: 0.62, stride:  0.62, whip: 1.7, open: 0.2 },
+  // STRAIGHT — the biggest arc of the six, the longest stride, the longest held
+  { lift: 182, contact:  10, finish: -174, back: false, crouch: 0.0, lean:  2.6,
+    hold: 0.68, stride:  0.70, whip: 1.7, open: 0.0 },
+  // WHIP — off the toes through midwicket. All bottom hand, so the bat snaps
+  // late rather than swinging evenly, and the hips open through it.
+  { lift: 170, contact: -28, finish: -152, back: false, crouch: 0.1, lean:  1.7,
+    hold: 0.46, stride:  0.38, whip: 3.0, open: 1.6 },
+  // PULL — rocks back and drops, swings flat and fast, finishes round the
+  // shoulder with the chest fully open
+  { lift: 186, contact: -58, finish: -170, back: true,  crouch: 1.1, lean: -0.7,
+    hold: 0.52, stride: -0.34, whip: 2.8, open: 2.2 },
   // GLANCE — barely a swing at all, the face opened and the ball gone
-  { lift: 150, contact: -24, finish:  -66, back: false, crouch: 0.3, lean:  0.7, hold: 0.18 },
+  { lift: 152, contact: -24, finish:  -66, back: false, crouch: 0.3, lean:  0.7,
+    hold: 0.20, stride:  0.26, whip: 1.5, open: 0.9 },
 ];
 const SWING_DOWN = 0.085;                // pick-up to contact, seconds
 const SWING_THROUGH = 0.20;              // contact to the end of the follow-through
+
+/* The stance, and what happens to it before a ball is bowled.
+
+   Three things the reference batting all has and the first pass did not: the
+   feet are not level, the bat comes up every ball rather than only when you
+   have committed, and there is a small press back and across as the bowler
+   loads — the trigger. Swagger opens the chest, straightens him up and slows
+   the bat taps down, which is §1's Presence doing its job.
+
+   `PICKUP` is how high the bat rides on an ordinary ball. Holding the input
+   raises it further and earlier, which is still the premeditation tell. */
+const STANCE = {
+  legFront: 21, legBack: 13,             // feet apart, not level
+  pickup: 166,                           // where the bat rides as he loads
+  pickupHeld: 178,                       // and where it rides if you commit early
+  trigger: 0.30,                         // seconds of press before release
+  tapEvery: 1.55,                        // bat taps per second at zero Swagger
+};
 
 /* Base timing windows in seconds, before any modifier. */
 const WIN = { middle: 0.052, good: 0.104, edge: 0.176 };
@@ -273,13 +299,18 @@ const TIERS = [
   },
 ];
 
+/* Graded for 1980s outside-broadcast rather than for a modern camera: a
+   yellower grass, a paler warmer sky, cream instead of white, and the kit
+   colours of the coloured-clothing era rather than of a laundry advert. */
 const PAL = {
-  sky: '#57b6e8', skyHi: '#9fdcf5',
-  grass: '#3f9c41', grassDark: '#2f7c34', grassLight: '#59b75a',
+  sky: '#5fb0dc', skyHi: '#abd9ea',
+  grass: '#4d9c3e', grassDark: '#3f8834', grassLight: '#63b352',
+  grassMow: '#559f45',                   // the lighter of the mown stripes
   pitch: '#c9a86a', pitchEdge: '#b08f52',
   maroon: '#7a1420', maroonLite: '#a81e2f', gold: '#e8b923',
-  ink: '#14181c', white: '#f4f1e8', ball: '#b8202c',
+  ink: '#14181c', white: '#f2ecdc', ball: '#b8202c',
   them: '#1f4f8a', themLite: '#2f6cb0',
+  board: ['#c4342b', '#e0a51e', '#20507f', '#e8e2d0', '#2c7a4b'],
 };
 /* ===================== SMALL UTILITIES ===================== */
 const boundaryR = () => (M && M.tier && M.tier.boundary) || BOUNDARY;
@@ -743,14 +774,29 @@ function drawHead(head, headR, o, u, dirHint) {
   }
 }
 
-function drawTorso(shoulder, hip, u, colour) {
+/* One colour block for the shirt, then the two shapes that date it: a broad
+   band across the chest and a wide collar. Eight shapes a figure was always
+   the budget; this spends two of them on saying which decade it is. */
+function drawTorso(shoulder, hip, u, colour, trim) {
+  const sw = u * 0.20, hw = u * 0.15;
   ctx.fillStyle = colour;
   ctx.beginPath();
-  ctx.moveTo(shoulder.x - u * 0.20, shoulder.y);
-  ctx.lineTo(shoulder.x + u * 0.20, shoulder.y);
-  ctx.lineTo(hip.x + u * 0.15, hip.y);
-  ctx.lineTo(hip.x - u * 0.15, hip.y);
+  ctx.moveTo(shoulder.x - sw, shoulder.y);
+  ctx.lineTo(shoulder.x + sw, shoulder.y);
+  ctx.lineTo(hip.x + hw, hip.y);
+  ctx.lineTo(hip.x - hw, hip.y);
   ctx.closePath(); ctx.fill();
+  if (!trim || u < 12) return;           // too small to read; don't muddy it
+
+  const band = (a, b, col) => {          // a, b are 0..1 down the torso
+    const wa = lerp(sw, hw, a), wb = lerp(sw, hw, b);
+    const xa = lerp(shoulder.x, hip.x, a), xb = lerp(shoulder.x, hip.x, b);
+    const ya = lerp(shoulder.y, hip.y, a), yb = lerp(shoulder.y, hip.y, b);
+    Art.poly([{ x: xa - wa, y: ya }, { x: xa + wa, y: ya },
+              { x: xb + wb, y: yb }, { x: xb - wb, y: yb }], col);
+  };
+  band(0.30, 0.46, trim);                // the chest stripe
+  band(0.00, 0.09, trim);                // the collar
 }
 
 function drawBat(grip, angDeg, H, dir, colour) {
@@ -784,7 +830,7 @@ function drawFigureSide(x, z, o) {
   Art.line(hip, kneeB, legW * 0.92, legCol); Art.line(kneeB, footB, legW * 0.92, legCol);
   Art.line(hip, kneeF, legW, legCol);       Art.line(kneeF, footF, legW, legCol);
 
-  drawTorso(shoulder, hip, u, o.shirt);
+  drawTorso(shoulder, hip, u, o.shirt, o.trim);
 
   const elbowB = limbFrom(shoulder, o.armB, H * 0.19, dir);
   const handB = limbFrom(elbowB, o.armB * 0.60, H * 0.18, dir);
@@ -815,7 +861,7 @@ function drawFigureFacing(x, z, o) {
   Art.line(hip, kneeL, legW, legCol); Art.line(kneeL, footL, legW, legCol);
   Art.line(hip, kneeR, legW, legCol); Art.line(kneeR, footR, legW, legCol);
 
-  drawTorso(shoulder, hip, u, o.shirt);
+  drawTorso(shoulder, hip, u, o.shirt, o.trim);
 
   const elbowL = limbFrom(shoulder, -o.armL, H * 0.19);
   const handL = limbFrom(elbowL, -o.armL * 0.62, H * 0.18);
@@ -832,6 +878,7 @@ function drawFigureFacing(x, z, o) {
 const FIG_DEFAULTS = {
   view: 'side', face: -1, shirt: PAL.maroon, pads: false, bat: false, cap: 'helmet',
   lean: 0, tilt: 0, crouch: 0, height: 1.82, batAng: -40, scale: 1, alpha: 1,
+  trim: null,
   armF: 30, armB: -22, legF: 18, legB: -18,       // side rig
   armL: 22, armR: 22, legL: 16, legR: 16,          // facing rig
 };
@@ -903,6 +950,30 @@ function drawGround(tier) {
   const R = boundaryR();
   const rope = ringArc(R, 128);
   fillArcRegion(rope, PAL.grass);
+
+  /* Mown stripes, running the length of the ground so they converge away
+     from you down the pitch. This is the single most 1980s thing on the
+     screen and it costs sixteen quads. They are clipped to the rope, and
+     each is skipped if a corner falls behind the lens — which only happens
+     right at the edge of frame when the camera has swung a long way round. */
+  if (rope.pts.length > 2) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(rope.pts[0].x, rope.pts[0].y);
+    for (let i = 1; i < rope.pts.length; i++) ctx.lineTo(rope.pts[i].x, rope.pts[i].y);
+    if (!rope.closed) { ctx.lineTo(rope.pts[rope.pts.length - 1].x, VH + 900); ctx.lineTo(rope.pts[0].x, VH + 900); }
+    ctx.closePath(); ctx.clip();
+    const far = PITCH_LEN / 2 - R - 6, near = Cam.x - Math.cos(Cam.yaw) * 3.0;
+    for (let i = -8; i < 8; i++) {
+      if (i % 2) continue;
+      const z0 = i * 5.0, z1 = z0 + 5.0;
+      const a = proj(far, 0, z0), b = proj(near, 0, z0);
+      const c = proj(near, 0, z1), d = proj(far, 0, z1);
+      if (a.behind || b.behind || c.behind || d.behind) continue;
+      Art.poly([a, b, c, d], PAL.grassMow);
+    }
+    ctx.restore();
+  }
   fillArcRegion(ringArc(R * 0.52, 96), PAL.grassDark);
 
   if (rope.pts.length > 1) {             // the rope itself
@@ -914,6 +985,8 @@ function drawGround(tier) {
     if (rope.closed) ctx.closePath();
     ctx.stroke();
   }
+
+  drawBoards(R);
 
   // the square, then the strip: both converge properly now
   Art.poly([
@@ -938,6 +1011,24 @@ function drawGround(tier) {
     if (a.behind || b.behind) return;
     ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
   });
+}
+
+/* Advertising boards around the rope: flat colour blocks a metre high, which
+   is what a ground looked like before anybody had a video hoarding. They also
+   do the useful job of hiding the seam between the outfield and whatever is
+   beyond it. */
+function drawBoards(R) {
+  const cx = PITCH_LEN / 2, steps = 96;
+  for (let i = 0; i < steps; i++) {
+    const a0 = i / steps * TAU, a1 = (i + 1) / steps * TAU;
+    const p0 = proj(cx + Math.cos(a0) * R, 0, Math.sin(a0) * R);
+    const p1 = proj(cx + Math.cos(a1) * R, 0, Math.sin(a1) * R);
+    if (p0.behind || p1.behind) continue;
+    if (Math.max(p0.x, p1.x) < -80 || Math.min(p0.x, p1.x) > VW + 80) continue;
+    const t0 = proj(cx + Math.cos(a0) * R, 1.0, Math.sin(a0) * R);
+    const t1 = proj(cx + Math.cos(a1) * R, 1.0, Math.sin(a1) * R);
+    Art.poly([p0, p1, t1, t0], PAL.board[i % PAL.board.length]);
+  }
 }
 
 /* A sightscreen straight behind the bowler's arm. It is furniture, but it
@@ -2488,49 +2579,84 @@ const STRIKER_X = CREASE_X + 0.45, STRIKER_Z = -0.72;
    the stance reads as a sprite. */
 function strikerPose(zone, swingT, info, shirt, cap, viewBack) {
   const sw = M.swagger;
-  const idle = Math.sin(now() * (2.4 - sw * 1.1)) * (2 + sw * 4);
   const o = {
     view: viewBack ? 'back' : 'front', shirt: shirt, pads: true, bat: true, cap: cap,
-    legL: 17 + sw * 4, legR: 17 + sw * 4,
-    armL: 26, armR: 30, lean: -0.6 + sw * 1.6, crouch: 0,
-    batAng: 18 + sw * 26 + idle, blur: 0, zone: zone,
+    legL: STANCE.legFront + sw * 3, legR: STANCE.legBack - sw * 2,
+    armL: 26, armR: 30, lean: -0.6 + sw * 1.6, crouch: 0, tilt: 0,
+    batAng: 16, blur: 0, zone: zone, stride: 0,
   };
 
   const t = swingT > 0 ? now() - swingT : -1;
   if (!info || t < 0 || t > 1.15) {
-    // waiting. The pick-up comes up as soon as he commits, and it comes up
-    // high — that shape is the house style before a ball has been bowled.
-    if (viewBack && Input.charging() && Bat.phase !== 'result') {
-      o.batAng = 174 + idle * 0.4; o.armL = 44; o.armR = 50; o.lean = -1.6;
+    // --- waiting ---
+    // the bat taps, and it taps lazier the further Swagger has come
+    const rate = STANCE.tapEvery * (1 - sw * 0.45);
+    const ph = (now() * rate) % 1;
+    const tap = ph < 0.18 ? Math.sin(ph / 0.18 * Math.PI) * 15 : 0;
+    o.batAng = 14 + sw * 20 + tap;
+    // he stops watching the bowler between balls
+    if (sw > 0.55) o.tilt = -1.4 * (sw - 0.55) / 0.45;
+
+    if (viewBack) {
+      // the trigger: a small press back and across as the bowler loads up,
+      // and the pick-up going up with it. Every ball, not only the ones you
+      // have already decided about.
+      const load = Bat.phase === 'runup'
+        ? clamp((Bat.t - (Bat.runup - STANCE.trigger)) / STANCE.trigger, 0, 1)
+        : (Bat.phase === 'flight' ? 1 : 0);
+      if (load > 0) {
+        const e = load * load * (3 - 2 * load);
+        o.batAng = lerp(o.batAng, STANCE.pickup, e);
+        o.armL = lerp(o.armL, 40, e);
+        o.armR = lerp(o.armR, 46, e);
+        o.crouch = e * 0.45;
+        o.lean = lerp(o.lean, -1.5, e);
+        o.stride = -e * 0.14;            // back and across
+        o.legL = lerp(o.legL, STANCE.legFront + 5, e);
+      }
+      // committing early lifts it higher still, which is the tell
+      if (Input.charging() && Bat.phase !== 'result') {
+        o.batAng = STANCE.pickupHeld; o.armL = 46; o.armR = 52; o.lean = -1.9;
+      }
     }
     return o;
   }
 
+  // --- playing it ---
   const A = SHOT_ANIM[zone];
   const beaten = info.quality === 'miss';
-  const finish = beaten ? A.finish - 40 : A.finish;   // beaten, he over-rotates
+  const finish = beaten ? A.finish - 40 : A.finish;
   let ang;
   if (t < SWING_DOWN) {
-    ang = lerp(A.lift, A.contact, (t / SWING_DOWN) * (t / SWING_DOWN));
+    // the downswing accelerates: `whip` is how much of it is bottom hand, so
+    // a flick through midwicket snaps late where a cover drive swings evenly
+    ang = lerp(A.lift, A.contact, Math.pow(t / SWING_DOWN, A.whip));
     o.blur = 1;
   } else if (t < SWING_DOWN + SWING_THROUGH) {
     const p = (t - SWING_DOWN) / SWING_THROUGH;
     ang = lerp(A.contact, finish, 1 - Math.pow(1 - p, 2));
     o.blur = 1 - p;
   } else {
-    const rel = clamp((t - SWING_DOWN - SWING_THROUGH - A.hold) / 0.28, 0, 1);
-    ang = lerp(finish, o.batAng, rel * rel);
+    const rel = clamp((t - SWING_DOWN - SWING_THROUGH - A.hold) / 0.30, 0, 1);
+    ang = lerp(finish, 16 + sw * 20, rel * rel);
   }
 
   const k = clamp(t / (SWING_DOWN + SWING_THROUGH), 0, 1);
+  const settle = clamp((t - SWING_DOWN - SWING_THROUGH - A.hold) / 0.30, 0, 1);
+  const w = k * (1 - settle);            // how far into the stroke he still is
   o.batAng = ang;
-  o.lean = lerp(o.lean, A.lean + (beaten ? -1.8 : 0), k);
-  o.crouch = A.crouch * k;
-  // the hands go with the bat, and the legs say front foot or back
-  o.armL = lerp(26, A.back ? 46 : 62, k);
-  o.armR = lerp(30, A.back ? 52 : 70, k);
-  o.legL = o.legL + (A.back ? 15 : -5) * k;
-  o.legR = o.legR + (A.back ? -3 : 21) * k;
+  o.lean = lerp(o.lean, A.lean + (beaten ? -1.8 : 0), w);
+  o.crouch = A.crouch * w;
+  o.tilt = (beaten ? -2.2 : A.open * 0.5) * w;
+  // the hands travel with the bat, and the chest opens through the shot
+  o.armL = lerp(26, A.back ? 44 : 62, w);
+  o.armR = lerp(30, A.back ? 54 : 72, w);
+  // the legs: a front-foot shot strides into it, a back-foot one rocks back
+  // and drops, and the back leg comes round as the hips open
+  o.legL = STANCE.legFront + (A.back ? 16 : -7) * w;
+  o.legR = STANCE.legBack + (A.back ? -4 : 26) * w + A.open * 4 * w;
+  // and he actually moves: the stride is a metre of pitch, not a lean
+  o.stride = A.stride * w;
   return o;
 }
 
@@ -2548,8 +2674,9 @@ function drawBatBlur(anchors, o) {
 function drawStriker() {
   const o = strikerPose(Bat.zone, Bat.swung ? Bat.swingT : -1, Bat.swingInfo,
                         PAL.maroon, M.gear === 'cap' ? 'cap' : 'helmet', true);
-  Art.shadow(STRIKER_X, STRIKER_Z, 0.44, 0.26);
-  drawBatBlur(drawFigure(STRIKER_X, STRIKER_Z, o), o);
+  const x = STRIKER_X - o.stride;        // down the pitch is decreasing x
+  Art.shadow(x, STRIKER_Z, 0.44, 0.26);
+  drawBatBlur(drawFigure(x, STRIKER_Z, o), o);
 }
 
 /* The batter you are bowling at, seen from behind your own arm. */
@@ -2571,7 +2698,8 @@ function drawFacingBatter() {
                         played ? { quality: Bowl.aiQuality } : null,
                         PAL.them, 'helmet', false);
   if (!played) o.lean = -0.4 + M.batterConf * 1.2;
-  drawBatBlur(drawFigure(STRIKER_X, STRIKER_Z, o), o);
+  const x = STRIKER_X - o.stride;
+  drawBatBlur(drawFigure(x, STRIKER_Z, o), o);
 }
 
 /* The bowler comes over the wicket from the off side, at z = +0.45. Both of
@@ -2789,44 +2917,83 @@ function shade(x, y, w, h) {
   ctx.fillRect(x, y, w, h);
 }
 
+/* The scorebar, built the way a 1980s caption generator built one: hard
+   rectangles, no rounded corners, no gradients, two flat colours and a rule
+   between the cells. The document asks for chunky numerals and no panels;
+   a panel is the one thing the period actually requires, so this is a panel
+   that behaves like poster type — nothing in it but the score, at a size you
+   can read from across the room. */
+const BAR = { x: 40, y: 34, h: 46, pad: 14 };
+
+function barCell(x, w, bg, text, size, colour, align) {
+  ctx.fillStyle = bg;
+  ctx.fillRect(x, BAR.y, w, BAR.h);
+  const tx = align === 'left' ? x + BAR.pad : align === 'right' ? x + w - BAR.pad : x + w / 2;
+  Art.text(text, tx, BAR.y + BAR.h - 14, size, colour, align || 'center');
+  return x + w;
+}
+
+function drawScorebar(cells) {
+  let x = BAR.x, total = 0;
+  cells.forEach(c => { total += c.w; });
+  ctx.fillStyle = 'rgba(0,0,0,0.30)';
+  ctx.fillRect(BAR.x + 5, BAR.y + 5, total, BAR.h);      // hard drop shadow
+  cells.forEach(c => { x = barCell(x, c.w, c.bg, c.t, c.size || 26, c.fg, c.align); });
+  ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = 2;
+  ctx.strokeRect(BAR.x, BAR.y, total, BAR.h);
+  let sx = BAR.x;
+  cells.slice(0, -1).forEach(c => {
+    sx += c.w;
+    ctx.beginPath(); ctx.moveTo(sx, BAR.y); ctx.lineTo(sx, BAR.y + BAR.h); ctx.stroke();
+  });
+}
+
 function drawHUD() {
   const b = M.bat, w = M.bowl;
   ctx.save();
   if (M.phase === 'bat') {
     const ov = Math.floor(b.balls / 6) + '.' + (b.balls % 6);
-    Art.text(b.runs + ' (' + b.balls + ')', VW / 2, 62, 58, PAL.white);
-    Art.text(M.mode === 'batPractice' ? 'PRACTICE  ' + ov + ' OV'
-      : ov + ' / ' + b.overs + ' OV   ·   ' + b.fours + 'x4  ' + b.sixes + 'x6',
-      VW / 2, 92, 21, 'rgba(255,255,255,0.8)');
-    drawMeter(40, 68, 300, 22, M.swagger, 'SWAGGER', M.swagger >= 0.999);
-    if (M.swagger >= 0.999) Art.text('HOLD FOR THE FLOURISH', 40, 116, 17, PAL.gold, 'left');
+    drawScorebar([
+      { w: 26, bg: PAL.gold, t: '', fg: PAL.ink },
+      { w: 150, bg: '#1c3f6e', t: M.gear === 'cap' ? 'CAP' : 'HELMET', fg: PAL.white, size: 22, align: 'left' },
+      { w: 170, bg: '#12294a', t: b.runs + ' (' + b.balls + ')', fg: PAL.gold, size: 32 },
+      { w: 130, bg: '#1c3f6e', t: ov + (M.mode === 'batPractice' ? '' : '/' + b.overs) + ' OV', fg: PAL.white, size: 22 },
+      { w: 120, bg: '#12294a', t: b.fours + 'x4  ' + b.sixes + 'x6', fg: PAL.white, size: 20 },
+    ]);
     if (Bat.bowler) {
-      Art.text(Bat.bowler.name, VW - 40, 58, 24, PAL.white, 'right');
-      Art.text(Bat.bowler.style.name, VW - 40, 82, 19, PAL.gold, 'right');
+      drawScorebar.tail = 1;
+      ctx.fillStyle = 'rgba(0,0,0,0.30)';
+      ctx.fillRect(VW - 345, BAR.y + 5, 305, BAR.h);
+      ctx.fillStyle = '#12294a'; ctx.fillRect(VW - 350, BAR.y, 305, BAR.h);
+      ctx.fillStyle = PAL.maroonLite; ctx.fillRect(VW - 350, BAR.y, 8, BAR.h);
+      ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = 2;
+      ctx.strokeRect(VW - 350, BAR.y, 305, BAR.h);
+      Art.text(Bat.bowler.name, VW - 332, BAR.y + 22, 21, PAL.white, 'left');
+      Art.text(Bat.bowler.style.name, VW - 332, BAR.y + 40, 16, PAL.gold, 'left');
     }
-    Art.text(M.gear === 'cap' ? 'CAP' : 'HELMET', VW - 40, 108, 17,
-             M.gear === 'cap' ? PAL.gold : 'rgba(255,255,255,0.6)', 'right');
+    drawMeter(40, 112, 300, 20, M.swagger, 'SWAGGER', M.swagger >= 0.999);
+    if (M.swagger >= 0.999) Art.text('HOLD FOR THE FLOURISH', 40, 156, 17, PAL.gold, 'left');
     if (Bat.phase === 'runup' && Input.charging()) {
       Art.text('BACKLIFT UP', VW / 2, VH - 34, 22, PAL.gold);
     }
-    if (Chase.on && Chase.shown > 0) {
-      Art.text(Chase.shown + (Chase.shown === 1 ? ' RUN' : ' RUNS'), VW / 2, VH - 40, 34, PAL.gold);
-    }
   } else {
     const ov = Math.floor(w.balls / 6) + '.' + (w.balls % 6);
-    Art.text(w.runs + '-' + w.wickets, VW / 2, 62, 58, PAL.white);
-    Art.text(ov + (M.mode === 'bowlPractice' ? ' OV  PRACTICE' : ' / ' + w.overs + ' OV'
-      + (w.target ? '   ·   NEED ' + Math.max(0, w.target - w.runs) : '')),
-      VW / 2, 92, 21, 'rgba(255,255,255,0.8)');
-    drawMeter(40, 68, 300, 22, M.hostility, 'HOSTILITY', M.hostility >= 0.85);
-    Art.text(M.style.name, VW - 40, 58, 24, PAL.gold, 'right');
-    Art.text('BATTER', VW - 178, 92, 15, 'rgba(255,255,255,0.6)', 'left');
-    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(VW - 178, 100, 138, 12);
+    drawScorebar([
+      { w: 26, bg: PAL.gold, t: '', fg: PAL.ink },
+      { w: 176, bg: '#1c3f6e', t: M.style.name, fg: PAL.white, size: 20, align: 'left' },
+      { w: 150, bg: '#12294a', t: w.runs + '-' + w.wickets, fg: PAL.gold, size: 32 },
+      { w: 130, bg: '#1c3f6e', t: ov + (M.mode === 'bowlPractice' ? '' : '/' + w.overs) + ' OV', fg: PAL.white, size: 22 },
+      { w: 150, bg: '#12294a', t: w.target ? 'NEED ' + Math.max(0, w.target - w.runs) : 'PRACTICE',
+        fg: PAL.white, size: 20 },
+    ]);
+    drawMeter(40, 112, 300, 20, M.hostility, 'HOSTILITY', M.hostility >= 0.85);
+    Art.text('BATTER', VW - 178, 46, 15, 'rgba(255,255,255,0.75)', 'left');
+    ctx.fillStyle = 'rgba(0,0,0,0.40)'; ctx.fillRect(VW - 178, 54, 138, 12);
     ctx.fillStyle = M.batterConf > 0.55 ? '#5fd07a' : M.batterConf > 0.3 ? '#e8b923' : '#d0483f';
-    ctx.fillRect(VW - 178, 100, 138 * clamp(M.batterConf, 0, 1), 12);
-    if (Chase.on && Chase.shown > 0) {
-      Art.text(Chase.shown + (Chase.shown === 1 ? ' RUN' : ' RUNS'), VW / 2, VH - 40, 34, PAL.gold);
-    }
+    ctx.fillRect(VW - 178, 54, 138 * clamp(M.batterConf, 0, 1), 12);
+  }
+  if (Chase.on && Chase.shown > 0) {
+    Art.text(Chase.shown + (Chase.shown === 1 ? ' RUN' : ' RUNS'), VW / 2, VH - 40, 34, PAL.gold);
   }
   ctx.restore();
 }
@@ -2880,6 +3047,45 @@ function drawBowlUI() {
     Art.text('RELEASE', VW / 2, y - 20, 24, PAL.white);
   }
 }
+/* ===================== THE BROADCAST PASS =====================
+   Everything above is drawn clean; this puts it through a 1983 outside
+   broadcast on the way out. Scanlines from a four-pixel pattern built once,
+   a soft vignette, and a warm cast over the whole frame. Kept deliberately
+   light — the point is that it reads as period, not that it reads as broken,
+   and every one of these is a veil over the thing you are trying to time. */
+const CRT = { lines: null, vign: null };
+
+function crtPattern() {
+  if (CRT.lines !== null) return CRT.lines;
+  try {
+    const c = document.createElement('canvas');
+    c.width = 1; c.height = 4;
+    const g = c.getContext('2d');
+    g.fillStyle = 'rgba(0,0,0,0.10)'; g.fillRect(0, 0, 1, 1);
+    g.fillStyle = 'rgba(0,0,0,0.04)'; g.fillRect(0, 1, 1, 1);
+    CRT.lines = ctx.createPattern(c, 'repeat') || false;
+  } catch (e) { CRT.lines = false; }     // no scanlines is fine; a crash is not
+  return CRT.lines;
+}
+
+function drawBroadcast() {
+  const p = crtPattern();
+  if (p) { ctx.fillStyle = p; ctx.fillRect(0, 0, VW, VH); }
+
+  if (!CRT.vign) {
+    CRT.vign = ctx.createRadialGradient(VW / 2, VH / 2, VH * 0.42, VW / 2, VH / 2, VH * 0.92);
+    CRT.vign.addColorStop(0, 'rgba(0,0,0,0)');
+    CRT.vign.addColorStop(1, 'rgba(8,6,14,0.34)');
+  }
+  ctx.fillStyle = CRT.vign;
+  ctx.fillRect(0, 0, VW, VH);
+
+  ctx.globalAlpha = 0.05;                // the warm cast of the tape
+  ctx.fillStyle = '#e8a03a';
+  ctx.fillRect(0, 0, VW, VH);
+  ctx.globalAlpha = 1;
+}
+
 /* ===================== SCREENS ===================== */
 const UI = { hits: [], rotateDismissed: false };
 function uiBtn(x, y, w, h, label, sub, hot) {
@@ -3077,6 +3283,7 @@ function frame(ts) {
       ctx.fillRect(0, 0, VW, VH);
       M.flash = Math.max(0, M.flash - dt * 6);
     }
+    drawBroadcast();                     // the picture, before the graphics
     drawBowlUI();
     drawHUD();
     drawBanner();
