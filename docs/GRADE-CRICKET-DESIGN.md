@@ -244,7 +244,7 @@ the fast-forward of the rest of your team's innings, the selector's note, and
 instant restart.
 
 **Controls.** One thumb does everything: press anywhere, drag to pick the
-line, release on the ball. Hold time is intent — tap is control, hold is
+line, release on the ball. The pick-up rises the moment you press. Hold time is intent — tap is control, hold is
 attack, hold from before the bowler lets go is premeditated *and* raises the
 backlift. Bowling is drag the target, tap BOWL, tap on the beat. Keyboard is
 1–6 aim, SPACE swing/bowl, arrows to aim your bowling, V for the variation,
@@ -320,6 +320,80 @@ taken from, so a cover drive aimed at COVER is a cover fielder's catch. The
 fan's zones therefore became a continuum: where you point *between* two names
 is where the ball goes. That is §3 Layer 2's "direction becomes which gap",
 and it costs nothing on a phone, because you were already dragging.
+
+### The shot is an animation, not a caption
+
+Each of the six zones has a keyframed swing: a high pick-up, a downswing to
+its own contact angle, a follow-through to its own finish, and a hold. The
+swing always rotates the same way — from over the shoulder, down through the
+line, and out the far side — because that is the direction a right-hander's
+bat actually travels; only where it stops differs, and that is what tells the
+shots apart. A cut is a quarter turn dying at waist height off the back foot.
+A straight drive is most of a half turn off the front foot finishing above the
+shoulder and held for well over half a second. The bat is drawn back along its
+own arc during the downswing so a middled shot reads as a wedge rather than a
+stick that teleported, and being beaten over-rotates the finish.
+
+The idiom is §1's: the pick-up is very high and comes up the moment the player
+commits, the bat comes down from over the shoulder rather than from behind the
+pad, and the follow-through is allowed to finish and then be held. Archetype,
+not portrait — what is lifted is the shape of the movement and nothing else.
+The AI batter you bowl at plays off the same table, so his shots read too.
+
+### A catch is a man getting to the ball
+
+Catches were judged at the bounce, against a reach that grew with hang time —
+up to about a dozen metres for a skier — and the ball was then handed to
+whoever qualified. On a scorecard that reads fine. On screen the ball came
+down in an empty patch of outfield and jumped into the hands of somebody
+standing a long way off, which is not a catch anybody believes. Caught behind
+was worse: a box drawn behind the stumps that named no fielder at all.
+
+The decision now happens in the air. A struck ball has no horizontal drag, so
+the moment it leaves the bat its landing point and its hang time are known
+exactly. Whoever can cover that ground in the time available is sent, and you
+watch him run under it; he is standing on the spot when the ball arrives, so
+the take happens where the ball actually was. If nobody can get there, nobody
+catches it — and the man who was sent is already at the ball, so he fields it
+straight away, which is also right. The keeper is in the same pool, for edges
+only, so caught behind is a keeper taking a catch like any other.
+
+Audited over 2,100 balls of deliberate slogging across both tiers: every
+dismissal given as caught was taken by a named fielder, and the furthest the
+ball ever moved into his hands was 2.46 m — inside a dive. Fielders ran an
+average of 6 m for their catches and as much as 14.6 m.
+
+Two more that used to happen only in the scoreboard:
+
+- **The keeper takes what you leave.** A ball left alone or beaten used to
+  sail on out of the ground with nobody behind the stumps. It now ends in the
+  gloves, every time.
+- **Bowled is judged at the stumps.** The check used to read the ball's
+  position several metres past them, after swing and spin had carried it
+  somewhere else. It now records what the ball was doing as it crossed the
+  stumps and judges that.
+
+The keeper is also drawn during your innings. He stands between the lens and
+the batter, which is why the first build culled him — and why the scene is now
+drawn back to front, each figure queued with its own distance from the lens,
+rather than in a fixed order that put whoever was written last on top. The
+stumps are in that queue too: painted first, they were painted *under* the
+keeper, so from your own end of the pitch he appeared to be standing in front
+of the wicket he was standing behind.
+
+Between balls the bowler walks back. He used to be drawn standing halfway down
+the pitch while you set your field, which is nowhere a bowler has ever stood;
+he now returns to the top of his mark over about a second and waits there,
+turning the ball over, which is also the design's long walk finally doing its
+job as feedback rather than as an input.
+
+### The non-striker is out of the way
+
+He was standing at z = +1.15, on the off side of the bowler's stumps, which is
+the lane a right-arm-over bowler runs and releases through — so every delivery
+went through him. He now stands on the other side, two metres clear of the
+arm, and backs up as the ball is released. The umpire had the same problem and
+has moved a step to the leg side of the bowler's stumps.
 
 ### Where this departs from the document
 

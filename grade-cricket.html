@@ -106,6 +106,42 @@ const SHOTS = [
   { name: 'GLANCE',   ang: 141,  sdeg: -150, likeH: [0.0, 1.3],  likeLen: ['full', 'yorker', 'good'],   power: 0.68, lift: 0.09 },
 ];
 
+/* Shot animation, one entry per zone.
+
+   `lift`, `contact` and `finish` are bat angles in the frame the rig uses —
+   degrees from straight down, positive toward screen right. The swing always
+   rotates the same way, from a high pick-up down through the line and out the
+   other side, because that is the direction a right-hander's bat actually
+   travels; only where it stops differs. A cut is a quarter turn that dies at
+   waist height, a straight drive is most of a half turn finishing above the
+   shoulder, and the difference between them is the whole read.
+
+   The house style is the idiom in §1: a very high pick-up, the bat coming
+   down from over the shoulder rather than from behind the pad, weight going
+   through the ball, and a follow-through that is allowed to finish and then
+   be held. `hold` is how long he stays in it — the drives hold longest,
+   because that is the shot worth looking at. Archetype, not portrait: what
+   is lifted is the shape of the movement and nothing else.
+
+   `back` is a back-foot shot: he rocks back and drops, rather than striding
+   into it. */
+const SHOT_ANIM = [
+  // CUT — back and across, bat horizontal at contact, hands roll it down
+  { lift: 176, contact:  95, finish:   28, back: true,  crouch: 0.7, lean:  1.0, hold: 0.26 },
+  // COVER — full stride, high elbow, bat finishing above the far shoulder
+  { lift: 172, contact:  30, finish: -138, back: false, crouch: 0.0, lean:  2.9, hold: 0.52 },
+  // STRAIGHT — the biggest arc of the six, and the longest held
+  { lift: 178, contact:  10, finish: -172, back: false, crouch: 0.0, lean:  2.4, hold: 0.58 },
+  // WHIP — off the toes through midwicket, wrists doing the work
+  { lift: 168, contact: -28, finish: -150, back: false, crouch: 0.1, lean:  1.7, hold: 0.42 },
+  // PULL — rocks back, swings flat, bat finishes round the shoulder
+  { lift: 184, contact: -58, finish: -168, back: true,  crouch: 1.0, lean: -0.7, hold: 0.48 },
+  // GLANCE — barely a swing at all, the face opened and the ball gone
+  { lift: 150, contact: -24, finish:  -66, back: false, crouch: 0.3, lean:  0.7, hold: 0.18 },
+];
+const SWING_DOWN = 0.085;                // pick-up to contact, seconds
+const SWING_THROUGH = 0.20;              // contact to the end of the follow-through
+
 /* Base timing windows in seconds, before any modifier. */
 const WIN = { middle: 0.052, good: 0.104, edge: 0.176 };
 
@@ -1035,6 +1071,16 @@ const Ball = {
   speed() { return Math.hypot(this.vx, this.vz); },
   distFromCentre() { return Math.hypot(this.x - PITCH_LEN / 2, this.z); },
 
+  /* Where and when it comes down, solved rather than watched. Nothing slows
+     a struck ball horizontally while it is in the air, so this is exact from
+     the moment it leaves the bat — which is what lets a fielder be sent to
+     the right patch of grass in time to be standing under it. */
+  landing() {
+    if (this.y <= 0.04 && this.vy <= 0) return null;
+    const t = (this.vy + Math.sqrt(this.vy * this.vy + 2 * G * Math.max(0, this.y))) / G;
+    return { t: t, x: this.x + this.vx * t, z: this.z + this.vz * t };
+  },
+
   draw() {
     if (!this.live) return;
     for (let i = 0; i < this.trail.length; i++) {
@@ -1128,6 +1174,10 @@ function buildField(tier, dossier) {
   return f;
 }
 
+/* A fielder's position right now — his station, or wherever he has run to. */
+const fx = p => p.chase ? p.cx : p.x;
+const fz = p => p.chase ? p.cz : p.z;
+
 /* ===================== SHOT RESOLUTION =====================
    Stats never roll outcomes. They set window width and deviation cone size;
    the input decides everything else. */
@@ -1215,7 +1265,7 @@ function fieldTheBall(field) {
       const tb = path.timeAt(s);
       if (tb > 14) break;
       const p = path.at(s);
-      const gap = Math.max(0, Math.hypot(p.x - f.x, p.z - f.z) - FIELD_REACH);
+      const gap = Math.max(0, Math.hypot(p.x - fx(f), p.z - fz(f)) - FIELD_REACH);
       if (fieldReact() + gap / fieldSpeed() <= tb) {
         if (!best || tb < best.t) best = { f: f, s: s, t: tb, x: p.x, z: p.z };
         break;
@@ -1244,41 +1294,87 @@ function fieldTheBall(field) {
   };
 }
 
+/* ===================== THE CATCHER =====================
+   A catch is a man getting to the ball, not a radius around where it lands.
+
+   The first build judged catches at the bounce with a reach that grew with
+   hang time — up to a dozen metres for a skier — and then dropped the ball
+   into the hands of whoever qualified. On the scorecard that reads fine. On
+   screen the ball came down in an empty patch of outfield and teleported
+   into somebody standing a long way away, which is not a catch anyone
+   believes.
+
+   So the decision is made in the air instead. The moment the ball is struck
+   its landing point is known exactly; whoever can get there in time is sent,
+   and you watch him run under it. He is standing on the spot when the ball
+   arrives, so the take happens where the ball actually was. If nobody can
+   get there, nobody catches it — and the man who was sent is already at the
+   ball, so he fields it immediately, which is right too. */
+const CATCH_REACH = 2.1;                 // dive, or a hand stuck out
+
+const Catcher = {
+  who: null, x: 0, z: 0, t0: 0, t1: 0,
+
+  clear() { if (this.who) { this.who.chase = 0; } this.who = null; },
+
+  /* Called once, the instant the ball is struck. */
+  commit(field, opts) {
+    this.clear();
+    const L = Ball.landing();
+    if (!L || L.t < 0.45) return;                       // never up long enough
+    if (Math.hypot(L.x - PITCH_LEN / 2, L.z) >= boundaryR() - 0.5) return;   // it is six
+    const reach = CATCH_REACH + (opts && opts.sharpCatching ? 0.5 : 0);
+    let best = null;
+    for (const p of field) {
+      if (p.keeper && !(opts && opts.edged)) continue;   // he takes edges, not skiers
+      const d = Math.hypot(L.x - p.hx, L.z - p.hz);
+      if (fieldReact() + Math.max(0, d - reach) / fieldSpeed() <= L.t
+          && (!best || d < best.d)) best = { p: p, d: d };
+    }
+    if (!best) return;
+    this.who = best.p; this.x = L.x; this.z = L.z;
+    this.t0 = now(); this.t1 = now() + L.t;
+    best.p.chase = 2; best.p.cx = best.p.hx; best.p.cz = best.p.hz;
+  },
+
+  /* He runs. By the time the ball arrives he is standing on the spot. */
+  update() {
+    if (!this.who) return;
+    const span = Math.max(0.12, this.t1 - this.t0 - fieldReact());
+    const u = clamp((now() - this.t0 - fieldReact()) / span, 0, 1);
+    this.who.cx = lerp(this.who.hx, this.x, u);
+    this.who.cz = lerp(this.who.hz, this.z, u);
+  },
+  /* Is he there, with the ball in front of him? */
+  holds() {
+    return this.who && Math.hypot(Ball.x - this.who.cx, Ball.z - this.who.cz) < CATCH_REACH + 0.4;
+  },
+};
+
 /* Watch a struck ball until something happens to it. Called every frame. */
 function resolveTravel(field, opts) {
   if (Ball.distFromCentre() >= boundaryR()) {
     return { type: Ball.y > 0.4 && !Ball.rolling ? 'six' : 'four' };
   }
-  // A flat ball straight at someone, chest high. A middled drive stays under
-  // this, which is the whole point.
+  // A flat ball straight at someone, chest high, taken where he stands. A
+  // middled drive stays under this, which is the whole point. The keeper is
+  // in this one only for an edge — a glance through the same airspace is a
+  // legitimate shot and has to be allowed to run away.
   if (!Ball.rolling && Ball.y > 1.05 && Ball.y < 2.7 && Ball.vy > -7) {
     for (const p of field) {
-      if (p.keeper) continue;
-      if (Math.hypot(Ball.x - p.x, Ball.z - p.z) < 1.9 + (opts.sharpCatching ? 0.4 : 0)) {
-        return { type: 'caught', by: p };
-      }
+      if (p.keeper && !opts.edged) continue;
+      const reach = (p.keeper ? 1.6 : 1.9) + (opts.sharpCatching ? 0.4 : 0);
+      if (Math.hypot(Ball.x - fx(p), Ball.z - fz(p)) < reach) return { type: 'caught', by: p };
     }
   }
-  // Everything else in the air is decided where it lands: the longer it hung
-  // up there, the further someone had to come to be under it. It has to have
-  // actually gone up first — a drive that skims along and pitches ten metres
-  // away is a ball to chase, not a catch, and treating every first bounce as
-  // a chance had cover taking a screamer off every cover drive.
+  // And the one somebody ran under. Only the man who was sent for it, only if
+  // he got there, and only if the ball ever went up — a drive that skims along
+  // and pitches ten metres away is a ball to chase, not a chance.
   if (Ball.landed && !Ball.catchChecked) {
     Ball.catchChecked = true;
-    if (Ball.apex > 1.9 && Ball.hangT > 0.62) {
-      const reach = 2.0 + Ball.hangT * fieldSpeed() * 0.52 + (opts.sharpCatching ? 0.6 : 0);
-      for (const p of field) {
-        if (p.keeper) continue;
-        if (Math.hypot(Ball.x - p.x, Ball.z - p.z) < reach) return { type: 'caught', by: p };
-      }
+    if (Ball.apex > 1.4 && Ball.hangT > 0.45 && Catcher.holds()) {
+      return { type: 'caught', by: Catcher.who };
     }
-  }
-  // keeper / slip: only an edge carries behind the stumps. A glance is a
-  // legitimate shot through the same airspace and must run away.
-  if (opts.edged && Ball.x > PITCH_LEN + 0.6 && Ball.x < PITCH_LEN + 3.6
-      && Math.abs(Ball.z) < 2.8 && Ball.y > 0.25 && Ball.y < 2.4 && !Ball.rolling) {
-    return { type: 'caughtBehind' };
   }
   // Once it is down and nobody has caught it, the field has it. This has to
   // happen the moment it lands rather than once it has settled into a roll:
@@ -1297,7 +1393,7 @@ function resolveTravel(field, opts) {
    batters turning for the second. Played out rather than announced, and
    compressed so the next ball is still seconds away. */
 const Chase = {
-  on: false, t: 0, speed: 1, plan: null, runs: 0, shown: 0, done: 0,
+  on: false, t: 0, speed: 1, plan: null, runs: 0, shown: 0, done: 0, sx: 0, sz: 0,
 
   start(plan, runs) {
     if (!plan || !plan.fielder) { this.on = false; return; }
@@ -1306,6 +1402,9 @@ const Chase = {
     // out to the throw coming back. Compressed so the next ball is close.
     this.done = runs === 0 ? plan.tIntercept + 0.5 : plan.total + 0.35;
     this.speed = clamp(this.done / 1.8, 1, 3.4);
+    // he starts from where he is, which is not always where he stands: he may
+    // already have run twenty metres going for the catch he did not get
+    this.sx = fx(plan.fielder); this.sz = fz(plan.fielder);
     plan.fielder.chase = 1;
   },
   stop() {
@@ -1333,8 +1432,8 @@ const Chase = {
       // snapping flat the instant the chase takes the ball over
       Ball.y = 0.036 + Math.abs(Math.sin(this.t * 5.5)) * 0.65 * Math.exp(-this.t * 1.8);
       const u = clamp((this.t - fieldReact()) / Math.max(0.15, p.tIntercept - fieldReact()), 0, 1);
-      p.fielder.cx = lerp(p.fielder.hx, p.x, u);
-      p.fielder.cz = lerp(p.fielder.hz, p.z, u);
+      p.fielder.cx = lerp(this.sx, p.x, u);
+      p.fielder.cz = lerp(this.sz, p.z, u);
     } else if (this.t < p.tIntercept + p.gather) {
       Ball.x = p.x; Ball.z = p.z; Ball.y = 0.24;
       p.fielder.cx = p.x; p.fielder.cz = p.z;
@@ -1365,6 +1464,43 @@ const Chase = {
     drawFigure(b, 1.25, Object.assign({}, one, { legL: 14 - cyc, legR: 14 + cyc, cap: 'cap' }));
   },
 };
+
+/* ===================== THE TAKE =====================
+   Somebody actually catches it. Freezing the ball in a fielder's hands and
+   holding the pose is the whole difference between CAUGHT as a caption and
+   CAUGHT as a thing you watched happen — and the same object does the
+   keeper's work, so a ball you leave alone ends up in his gloves instead of
+   sailing off the back of the ground. */
+const Take = {
+  on: false, t: 0, who: null, x: 0, y: 0, z: 0, keeper: false,
+
+  start(p, y, keeper) {
+    if (!p) return false;                // only ever true for a keeper gather
+                                         // with no keeper set; a catch always
+                                         // arrives here with the man who took it
+    this.on = true; this.t = 0; this.who = p; this.keeper = !!keeper;
+    this.x = p.chase ? p.cx : p.x;
+    this.z = p.chase ? p.cz : p.z;
+    this.y = clamp(y === undefined ? Ball.y : y, 0.30, 2.30);
+    p.taking = now();
+    Ball.x = this.x; Ball.z = this.z; Ball.y = this.y;
+    Ball.vx = 0; Ball.vy = 0; Ball.vz = 0;
+    Ball.rolling = false; Ball.live = true; Ball.trail.length = 0;
+    return true;
+  },
+  stop() { if (this.who) this.who.taking = 0; this.on = false; this.who = null; },
+  update(dt) {
+    if (!this.on) return;
+    this.t += dt;
+    // he brings it in to his chest, and the ball goes with his hands
+    const settle = clamp(this.t / 0.32, 0, 1);
+    Ball.x = this.x; Ball.z = this.z;
+    Ball.y = lerp(this.y, this.keeper ? 0.95 : 1.25, settle * settle);
+  },
+};
+
+/* The keeper, out of whichever field is set. */
+const keeperOf = field => (field || []).find(f => f.keeper) || null;
 
 /* ===================== TUNING =====================
    The numbers the whole feel hangs off, in one place. */
@@ -1546,7 +1682,7 @@ const M = {
     };
     this.field = buildField(tier, null);
     this.msg = ''; this.msgT = 0;
-    Chase.stop();
+    Chase.stop(); Take.stop(); Catcher.clear();
   },
   bowlerNow() { return this.attack[Math.floor(this.bat.balls / 6) % this.attack.length]; },
   say(text, big) { this.msg = text; this.msgT = now(); this.msgBig = !!big; },
@@ -1573,8 +1709,8 @@ const Bat = {
     this.phase = 'ready'; this.t = 0; this.swung = false;
     this.outcome = null; this.ghost = null; this.flourish = false;
     this.earlyHold = false; this.backlift = 0; this.swingT = -9;
-    this.marker = null;
-    Chase.stop();
+    this.marker = null; this.pastStumps = null;
+    Chase.stop(); Take.stop(); Catcher.clear();
     Input.flush();
 
     this.bowler = M.bowlerNow();
@@ -1648,6 +1784,7 @@ const Bat = {
       if (rel && !this.swung) this.swing(rel);
       else if (!this.swung && now() > this.contactT + 0.20) this.swing(null);
       if (this.swung && Ball.hit && this.outcome === null) {
+        Catcher.update();
         const r = resolveTravel(M.field, {
           sharpCatching: T.liveField,
           edged: this.swingInfo && this.swingInfo.quality === 'edge',
@@ -1657,22 +1794,26 @@ const Bat = {
         Snd.travelTo(200 + d * 9);
         Cam.chase(Ball.x, Ball.y, Ball.z);
       }
-      if (!Ball.hit && Ball.x > PITCH_LEN + 4) this.finish({ type: 'through' });
+      // remember what it was doing as it went past the stumps: that, not
+      // where it ends up in the keeper's gloves, is what decides bowled
+      if (!Ball.hit && !this.pastStumps && Ball.x >= PITCH_LEN) {
+        this.pastStumps = { z: Ball.z, y: Ball.y };
+      }
+      if (!Ball.hit && Ball.x > this.keeperX() - 0.3) this.finish({ type: 'through' });
       if (this.t > 6) this.finish({ type: 'runs', runs: 0 });
       return;
     }
 
     if (this.phase === 'result') {
-      if (Chase.on) {
-        Chase.update(dt);
-        Cam.chase(Ball.x, Ball.y, Ball.z);
-      } else if (Ball.hit || Ball.live) {
-        Ball.step(dt);
-      }
+      if (Take.on) Take.update(dt);
+      else if (Chase.on) { Chase.update(dt); Cam.chase(Ball.x, Ball.y, Ball.z); }
+      else if (Ball.hit || Ball.live) Ball.step(dt);
       const wait = this.outcome && this.outcome.wicket ? 2.4 : 1.2;
       if (!Chase.on && this.t > wait) this.after();
     }
   },
+
+  keeperX() { const k = keeperOf(M.field); return k ? k.x : CONTACT_X + 2.6; },
 
   swing(rel) {
     this.swung = true;
@@ -1712,6 +1853,7 @@ const Bat = {
     this.swingInfo = { type: type, quality: quality, err: dt, approp: approp };
     this.ghost = { intended: aimAng, actual: angle };
     playShot({ quality: quality, power: power, angleDeg: angle, lift: lift, contactY: this.pred.y });
+    Catcher.commit(M.field, { sharpCatching: T.liveField, edged: quality === 'edge' });
     Snd.bat(quality === 'edge' ? 'edge' : 'middle');
     if (quality === 'middle') {
       M.hitstop = 0.05; M.flash = 1; Cam.kick(this.flourish ? 0.9 : 0.5);
@@ -1732,10 +1874,12 @@ const Bat = {
     b.balls++;
     const o = { wicket: false, runs: 0, label: '', how: '' };
 
-    if (r.type === 'caught' || r.type === 'caughtBehind') {
+    if (r.type === 'caught') {
       o.wicket = true;
-      o.label = 'CAUGHT';
-      o.how = r.type === 'caughtBehind' ? 'c wk' : 'c ' + (r.by ? r.by.name.toLowerCase() : 'field');
+      o.label = r.by.keeper ? 'CAUGHT BEHIND' : 'CAUGHT';
+      o.how = r.by.keeper ? 'c wk' : 'c ' + r.by.name.toLowerCase();
+      Take.start(r.by, Ball.y);
+      Cam.chase(Take.x, 1.5, Take.z);
     } else if (r.type === 'six') {
       o.runs = 6; o.label = 'SIX'; b.sixes++;
     } else if (r.type === 'four') {
@@ -1745,18 +1889,23 @@ const Bat = {
       o.label = r.runs === 0 ? 'DOT' : r.runs + (r.runs === 1 ? ' RUN' : ' RUNS');
       if (r.plan && r.runs >= 0) Chase.start(r.plan, r.runs);
     } else if (r.type === 'through') {
-      const hit = Math.abs(Ball.z) < STUMP_HALF_W + 0.05;
-      const low = this.pred.y < STUMP_H + 0.12;
-      if (hit && low) { o.wicket = true; o.label = 'BOWLED'; o.how = 'b'; }
-      else if (low && Math.abs(this.pred.z) < 0.16 && this.swingInfo
+      const ps = this.pastStumps || { z: Ball.z, y: this.pred.y };
+      const hit = Math.abs(ps.z) < STUMP_HALF_W + 0.05 && ps.y < STUMP_H + 0.06;
+      if (hit) { o.wicket = true; o.label = 'BOWLED'; o.how = 'b'; }
+      else if (ps.y < STUMP_H && Math.abs(this.pred.z) < 0.16 && this.swingInfo
                && this.swingInfo.quality === 'miss' && this.zone >= 3 && Math.random() < 0.45) {
         o.wicket = true; o.label = 'LBW'; o.how = 'lbw';
-      } else { o.label = this.swingInfo && this.swingInfo.quality === 'miss' ? 'BEATEN' : 'DOT'; }
+      } else {
+        o.label = this.swingInfo && this.swingInfo.quality === 'miss' ? 'BEATEN' : 'DOT';
+        // left alone or beaten: the keeper takes it, rather than the ball
+        // carrying on out of the ground with nobody behind the stumps
+        Take.start(keeperOf(M.field), Ball.y, true);
+      }
     }
     this.applyOutcome(o);
     this.outcome = o;
     this.phase = 'result'; this.t = 0;
-    if (!Chase.on) Cam.home(false);
+    if (!Chase.on && !Take.on) Cam.home(false);
   },
 
   applyOutcome(o) {
@@ -1813,16 +1962,16 @@ const Bowl = {
   target: { x: 16.4, z: 0.30 },
   vari: false, sweep: 0, sweepDir: 1, tapErr: 1, tapped: false,
   d: null, pred: null, ai: null, outcome: null, ghost: null,
-  flinch: 0, surprise: 0, pace: 20, releaseT: 0, aiQuality: 'good',
+  flinch: 0, surprise: 0, pace: 20, releaseT: 0, aiQuality: 'good', aiSwingT: -9,
   loose: false, band: BANDS[2],
 
   nextBall() {
     this.phase = 'setup'; this.t = 0;
     this.vari = false; this.tapped = false; this.tapErr = 1;
     this.outcome = null; this.ghost = null; this.ai = null;
-    this.sweep = 0; this.sweepDir = 1;
+    this.sweep = 0; this.sweepDir = 1; this.aiSwingT = -9; this.pastStumps = null;
     Ball.live = false;
-    Chase.stop();
+    Chase.stop(); Take.stop(); Catcher.clear();
     Input.flush();
     Cam.home(false);
     Snd.mode = 'bowl';
@@ -1900,24 +2049,25 @@ const Bowl = {
       Ball.step(dt);
       if (!this.ai.played && now() >= this.ai.swingAt) this.playAI();
       if (this.ai.played && Ball.hit && this.outcome === null) {
+        Catcher.update();
         const r = resolveTravel(M.field, { sharpCatching: true, edged: this.aiQuality === 'edge' });
         if (r) this.finish(r);
         Snd.travelTo(200 + Ball.distFromCentre() * 9);
         Cam.chase(Ball.x, Ball.y, Ball.z);
       }
-      if (!Ball.hit && Ball.x > PITCH_LEN + 4) this.finish({ type: 'through' });
+      if (!Ball.hit && !this.pastStumps && Ball.x >= PITCH_LEN) {
+        this.pastStumps = { z: Ball.z, y: Ball.y };
+      }
+      if (!Ball.hit && Ball.x > Bat.keeperX() - 0.3) this.finish({ type: 'through' });
       if (this.t > 6) this.finish({ type: 'runs', runs: 0 });
       if (this.flinch > 0) this.flinch -= dt;
       return;
     }
 
     if (this.phase === 'result') {
-      if (Chase.on) {
-        Chase.update(dt);
-        Cam.chase(Ball.x, Ball.y, Ball.z);
-      } else if (Ball.live) {
-        Ball.step(dt);
-      }
+      if (Take.on) Take.update(dt);
+      else if (Chase.on) { Chase.update(dt); Cam.chase(Ball.x, Ball.y, Ball.z); }
+      else if (Ball.live) Ball.step(dt);
       const wait = this.outcome && this.outcome.wicket ? 2.2 : 1.1;
       if (!Chase.on && this.t > wait) this.after();
     }
@@ -2025,7 +2175,8 @@ const Bowl = {
   playAI() {
     const T = M.tier;
     this.ai.played = true;
-    if (this.ai.leave) { Snd.bat('miss'); return; }
+    this.aiSwingT = now();
+    if (this.ai.leave) { Snd.bat('miss'); this.aiSwingT = -9; return; }
     const shot = SHOTS[this.ai.zone];
     const approp = shotAppropriate(shot, this.pred.y, this.band.key);
     const widen = T.aiWindow * (0.72 + approp * 0.34) * (1 - M.hostility * 0.14)
@@ -2057,6 +2208,7 @@ const Bowl = {
     this.ghost = { intended: aim, actual: angle };
     this.aiQuality = quality;
     playShot({ quality: quality, power: power, angleDeg: angle, lift: lift, contactY: this.pred.y });
+    Catcher.commit(M.field, { sharpCatching: true, edged: quality === 'edge' });
     Snd.bat(quality === 'edge' ? 'edge' : 'middle');
     Snd.travel(220);
   },
@@ -2067,8 +2219,10 @@ const Bowl = {
     const b = M.bowl;
     b.balls++;
     const o = { wicket: false, runs: 0, label: '' };
-    if (r.type === 'caught' || r.type === 'caughtBehind') {
-      o.wicket = true; o.label = r.type === 'caughtBehind' ? 'CAUGHT BEHIND' : 'CAUGHT';
+    if (r.type === 'caught') {
+      o.wicket = true; o.label = r.by.keeper ? 'CAUGHT BEHIND' : 'CAUGHT';
+      Take.start(r.by, Ball.y);
+      Cam.chase(Take.x, 1.5, Take.z);
     } else if (r.type === 'six') { o.runs = 6; o.label = 'SIX'; }
     else if (r.type === 'four') { o.runs = 4; o.label = 'FOUR'; }
     else if (r.type === 'runs') {
@@ -2076,10 +2230,13 @@ const Bowl = {
       o.label = r.runs === 0 ? 'DOT' : r.runs + (r.runs === 1 ? ' RUN' : ' RUNS');
       if (r.plan) Chase.start(r.plan, r.runs);
     } else {
-      const hit = Math.abs(Ball.z) < STUMP_HALF_W + 0.05 && this.pred.y < STUMP_H + 0.12;
+      const ps = this.pastStumps || { z: Ball.z, y: this.pred.y };
+      const hit = Math.abs(ps.z) < STUMP_HALF_W + 0.05 && ps.y < STUMP_H + 0.06;
       if (hit) { o.wicket = true; o.label = 'BOWLED'; }
-      else if (this.ai.leave) o.label = 'LEFT';
-      else o.label = 'BEATEN';
+      else {
+        o.label = this.ai.leave ? 'LEFT' : 'BEATEN';
+        Take.start(keeperOf(M.field), Ball.y, true);
+      }
     }
     if (o.label === 'BEATEN') { M.hostility = clamp(M.hostility + 0.08, 0, 1); M.batterConf = clamp(M.batterConf - 0.06, 0, 1); }
     if (o.runs > 0 && o.runs < 4) M.batterConf = clamp(M.batterConf + 0.04, 0, 1);
@@ -2095,7 +2252,7 @@ const Bowl = {
     this.outcome = o;
     this.phase = 'result'; this.t = 0;
     Snd.intensity = M.hostility;
-    if (!Chase.on) Cam.home(false);
+    if (!Chase.on && !Take.on) Cam.home(false);
   },
 
   after() {
@@ -2246,15 +2403,18 @@ function drawGhost(g) {
 /* The bowler, seen head on as he runs at you. Legs scissor, and in the
    last stretch the arm goes over the top — with no faces and no fingers
    that arm and the seam on the ball are the whole tell. */
+const BOWLER_Z = 0.45;
+const markX = awayFromCamera => (awayFromCamera ? -7.0 : -8.0);
+const runupX = (p, awayFromCamera) => lerp(markX(awayFromCamera), RELEASE_X, Math.pow(p, 0.85));
+
 function drawBowlerRunup(p, shirt, style, awayFromCamera) {
-  const startX = awayFromCamera ? -7.0 : -8.0;
-  const x = lerp(startX, RELEASE_X, Math.pow(p, 0.85));
+  const x = runupX(p, awayFromCamera);
   const cyc = Math.sin(p * (isSpin(style) ? 26 : 36)) * 30;
   const del = clamp((p - 0.80) / 0.20, 0, 1);
   // the arm sweeps up behind, over the top, and through
   const armOver = lerp(-40, -300, del);
-  Art.shadow(x, 0.45, 0.42, 0.2);
-  const f = drawFigure(x, 0.45, {
+  Art.shadow(x, BOWLER_Z, 0.42, 0.2);
+  const f = drawFigure(x, BOWLER_Z, {
     view: 'front', shirt: shirt, cap: 'cap',
     legL: 16 + cyc, legR: 16 - cyc,
     armL: del > 0 ? armOver : -34 + cyc * 0.9,
@@ -2262,23 +2422,50 @@ function drawBowlerRunup(p, shirt, style, awayFromCamera) {
     lean: (awayFromCamera ? -1 : 1) * (0.8 + p * 1.6),
     tilt: -del * 2,
   });
-  if (f && del < 0.9) {                  // the ball, in the hand, seam showing
-    const hb = f.handL;
-    const r = Math.max(1.6, f.u * 0.085);
-    Art.disc(hb, r, PAL.ball);
-    ctx.save();
-    ctx.translate(hb.x, hb.y); ctx.rotate(now() * 9);
-    ctx.strokeStyle = PAL.white; ctx.lineWidth = Math.max(1, r * 0.35);
-    ctx.beginPath(); ctx.moveTo(-r * 0.9, 0); ctx.lineTo(r * 0.9, 0); ctx.stroke();
-    ctx.restore();
-  }
+  if (del < 0.9) drawBallInHand(f, 9);    // seam showing, the only tell there is
   return f;
+}
+
+/* The ball turning over in his hand. */
+function drawBallInHand(f, spin) {
+  if (!f) return;
+  const r = Math.max(1.6, f.u * 0.085);
+  Art.disc(f.handL, r, PAL.ball);
+  ctx.save();
+  ctx.translate(f.handL.x, f.handL.y); ctx.rotate(now() * spin);
+  ctx.strokeStyle = PAL.white; ctx.lineWidth = Math.max(1, r * 0.35);
+  ctx.beginPath(); ctx.moveTo(-r * 0.9, 0); ctx.lineTo(r * 0.9, 0); ctx.stroke();
+  ctx.restore();
+}
+
+/* Waiting to bowl. He walks back from his follow-through to the top of his
+   mark and stands there turning the ball over — which is where a bowler is
+   while the field is being set, rather than standing on a length halfway
+   down the pitch, which is where he used to be drawn. */
+function bowlerWaitX(t) {
+  const u = clamp(t / 1.4, 0, 1);
+  return lerp(RELEASE_X, markX(true), u * u * (3 - 2 * u));
+}
+function drawBowlerWaiting(t, shirt) {
+  const u = clamp(t / 1.4, 0, 1);
+  const x = bowlerWaitX(t);
+  const cyc = u < 1 ? Math.sin(t * 8.5) * 15 : 0;
+  const idle = Math.sin(now() * 1.3) * 2.5;
+  Art.shadow(x, BOWLER_Z, 0.42, 0.2);
+  const f = drawFigure(x, BOWLER_Z, {
+    view: 'front', shirt: shirt, cap: 'cap',
+    legL: 11 + cyc, legR: 11 - cyc,
+    armL: -20 - cyc * 0.5 + idle, armR: 20 + cyc * 0.5,
+    lean: u < 1 ? 0.7 : 0,
+  });
+  drawBallInHand(f, u < 1 ? 5 : 2.2);
 }
 
 /* He reacts, visibly, every ball. Beating an opponent is more fun than
    beating a difficulty curve. */
+const REACTION_X = 2.6;
 function drawBowlerReaction(mood, shirt) {
-  const x = 2.6;
+  const x = REACTION_X;
   Art.shadow(x, 0.5, 0.42, 0.2);
   const base = { view: 'front', shirt: shirt, cap: 'cap' };
   if (mood > 0.35) {                     // hands on head
@@ -2293,103 +2480,208 @@ function drawBowlerReaction(mood, shirt) {
 /* The striker, from behind. His stance is the Swagger readout — pure
    feedback, no mechanical effect, and it is the thing players talk about. */
 const STRIKER_X = CREASE_X + 0.45, STRIKER_Z = -0.72;
-function strikerBatAngle() {
+
+/* The whole shot, as a pose. Stance and pick-up when he is waiting, then
+   the swing runs on its own clock from the moment he commits: down through
+   the line, out the far side, and held there. The hold is the point — a
+   stroke you watch finish reads as a stroke, and a bat that snaps back to
+   the stance reads as a sprite. */
+function strikerPose(zone, swingT, info, shirt, cap, viewBack) {
   const sw = M.swagger;
   const idle = Math.sin(now() * (2.4 - sw * 1.1)) * (2 + sw * 4);
-  if (Bat.swung && Bat.swingInfo && Bat.swingInfo.quality !== 'miss' && now() - Bat.swingT < 0.45) {
-    let a = 180 - SHOTS[Bat.zone].sdeg;
-    while (a > 180) a -= 360;
-    return a;
+  const o = {
+    view: viewBack ? 'back' : 'front', shirt: shirt, pads: true, bat: true, cap: cap,
+    legL: 17 + sw * 4, legR: 17 + sw * 4,
+    armL: 26, armR: 30, lean: -0.6 + sw * 1.6, crouch: 0,
+    batAng: 18 + sw * 26 + idle, blur: 0, zone: zone,
+  };
+
+  const t = swingT > 0 ? now() - swingT : -1;
+  if (!info || t < 0 || t > 1.15) {
+    // waiting. The pick-up comes up as soon as he commits, and it comes up
+    // high — that shape is the house style before a ball has been bowled.
+    if (viewBack && Input.charging() && Bat.phase !== 'result') {
+      o.batAng = 174 + idle * 0.4; o.armL = 44; o.armR = 50; o.lean = -1.6;
+    }
+    return o;
   }
-  if (Input.charging() && Bat.phase !== 'result') return 172 + idle;   // backlift up
-  return 18 + sw * 26 + idle;            // and it gets higher and lazier
+
+  const A = SHOT_ANIM[zone];
+  const beaten = info.quality === 'miss';
+  const finish = beaten ? A.finish - 40 : A.finish;   // beaten, he over-rotates
+  let ang;
+  if (t < SWING_DOWN) {
+    ang = lerp(A.lift, A.contact, (t / SWING_DOWN) * (t / SWING_DOWN));
+    o.blur = 1;
+  } else if (t < SWING_DOWN + SWING_THROUGH) {
+    const p = (t - SWING_DOWN) / SWING_THROUGH;
+    ang = lerp(A.contact, finish, 1 - Math.pow(1 - p, 2));
+    o.blur = 1 - p;
+  } else {
+    const rel = clamp((t - SWING_DOWN - SWING_THROUGH - A.hold) / 0.28, 0, 1);
+    ang = lerp(finish, o.batAng, rel * rel);
+  }
+
+  const k = clamp(t / (SWING_DOWN + SWING_THROUGH), 0, 1);
+  o.batAng = ang;
+  o.lean = lerp(o.lean, A.lean + (beaten ? -1.8 : 0), k);
+  o.crouch = A.crouch * k;
+  // the hands go with the bat, and the legs say front foot or back
+  o.armL = lerp(26, A.back ? 46 : 62, k);
+  o.armR = lerp(30, A.back ? 52 : 70, k);
+  o.legL = o.legL + (A.back ? 15 : -5) * k;
+  o.legR = o.legR + (A.back ? -3 : 21) * k;
+  return o;
 }
+
+/* The bat drawn back along its own arc, so a middled shot is a wedge rather
+   than a stick that teleported. */
+function drawBatBlur(anchors, o) {
+  if (!anchors || o.blur < 0.06) return;
+  for (let i = 1; i <= 3; i++) {
+    ctx.globalAlpha = 0.22 * o.blur * (4 - i) / 3;
+    drawBat(anchors.handR, o.batAng + i * 19, anchors.H, 1, '#efe3c0');
+  }
+  ctx.globalAlpha = 1;
+}
+
 function drawStriker() {
-  const sw = M.swagger;
-  const swinging = Bat.swung && Bat.swingInfo && Bat.swingInfo.quality !== 'miss' && now() - Bat.swingT < 0.45;
+  const o = strikerPose(Bat.zone, Bat.swung ? Bat.swingT : -1, Bat.swingInfo,
+                        PAL.maroon, M.gear === 'cap' ? 'cap' : 'helmet', true);
   Art.shadow(STRIKER_X, STRIKER_Z, 0.44, 0.26);
-  drawFigure(STRIKER_X, STRIKER_Z, {
-    view: 'back', shirt: PAL.maroon, pads: true, bat: true,
-    cap: M.gear === 'cap' ? 'cap' : 'helmet',
-    legL: 17 + sw * 5, legR: 17 + sw * 5,
-    armL: swinging ? 54 : 26, armR: swinging ? 62 : 30,
-    lean: swinging ? 2.2 : -0.6 + sw * 1.6,
-    batAng: strikerBatAngle(),
-  });
+  drawBatBlur(drawFigure(STRIKER_X, STRIKER_Z, o), o);
 }
 
 /* The batter you are bowling at, seen from behind your own arm. */
+/* The batter you are bowling at, seen from behind your own arm. He plays
+   the same six shots off the same table — you are watching him middle them
+   or not, which is what Hostility is for. */
 function drawFacingBatter() {
   const fl = Bowl.flinch > 0;
   Art.shadow(STRIKER_X, STRIKER_Z, 0.44, 0.26);
-  drawFigure(STRIKER_X, STRIKER_Z, {
-    view: 'front', shirt: PAL.them, pads: true, bat: true, cap: 'helmet',
-    legL: fl ? 30 : 17, legR: fl ? 8 : 17,
-    armL: fl ? -150 : 26, armR: fl ? 140 : 30,
-    lean: fl ? -2.4 : -0.4 + M.batterConf * 1.2,
-    crouch: fl ? 1.6 : 0,
-    batAng: fl ? -150 : 20,
-  });
+  if (fl) {
+    drawFigure(STRIKER_X, STRIKER_Z, {
+      view: 'front', shirt: PAL.them, pads: true, bat: true, cap: 'helmet',
+      legL: 30, legR: 8, armL: -150, armR: 140, lean: -2.4, crouch: 1.6, batAng: -150,
+    });
+    return;
+  }
+  const played = Bowl.ai && Bowl.ai.played && Bowl.aiSwingT > 0;
+  const o = strikerPose(played ? Bowl.ai.zone : 2, played ? Bowl.aiSwingT : -1,
+                        played ? { quality: Bowl.aiQuality } : null,
+                        PAL.them, 'helmet', false);
+  if (!played) o.lean = -0.4 + M.batterConf * 1.2;
+  drawBatBlur(drawFigure(STRIKER_X, STRIKER_Z, o), o);
 }
 
+/* The bowler comes over the wicket from the off side, at z = +0.45. Both of
+   these used to stand in that lane — the non-striker on the off side of the
+   stumps and the umpire directly in it — so the delivery ran through them.
+   They now stand where they actually stand: the umpire a step off to the
+   leg side of the bowler's stumps, and the non-striker backing up on the
+   other side from the arm. */
+const UMPIRE_X = -2.4, UMPIRE_Z = -1.05;
+const NONSTRIKER_Z = -1.55;
+
 function drawUmpire() {
-  Art.shadow(-1.8, 0, 0.4, 0.18);
-  drawFigure(-1.8, 0, {
+  Art.shadow(UMPIRE_X, UMPIRE_Z, 0.4, 0.18);
+  drawFigure(UMPIRE_X, UMPIRE_Z, {
     view: 'front', shirt: '#e6e2d6', cap: 'cap', legL: 11, legR: 11, armL: 10, armR: 10, scale: 0.98,
   });
 }
 
-function drawNonStriker() {
-  Art.shadow(FAR_CREASE_X - 0.8, 1.15, 0.4, 0.2);
-  drawFigure(FAR_CREASE_X - 0.8, 1.15, {
-    view: 'front', shirt: PAL.maroon, pads: true, bat: true, cap: 'cap',
-    legL: 15, legR: 15, armL: 24, armR: 26, batAng: 22, scale: 0.98,
+/* He backs up as the ball is released, which is both correct and the only
+   movement in that half of the picture. */
+function drawNonStriker(shirt) {
+  const live = (M.phase === 'bat' && Bat.phase === 'flight') ||
+               (M.phase === 'bowl' && (Bowl.phase === 'flight' || Bowl.phase === 'result'));
+  const back = live ? clamp((M.phase === 'bat' ? Bat.t : Bowl.t) * 1.5, 0, 1) : 0;
+  const x = FAR_CREASE_X - 0.3 + back * 1.9;
+  Art.shadow(x, NONSTRIKER_Z, 0.4, 0.2);
+  drawFigure(x, NONSTRIKER_Z, {
+    view: 'front', shirt: shirt, pads: true, bat: true, cap: 'cap',
+    legL: 15 + back * 9, legR: 15 - back * 5,
+    armL: 24, armR: 26, batAng: 22, lean: back * 0.9, scale: 0.98,
   });
 }
 
-/* The field. Names are drawn under the men because knowing where cover is
-   standing is half of knowing where to hit it. */
-function drawField(field, shirt, labels) {
-  const bob = now() * 1.6;
-  for (const p of field) {
-    if (p.bowler) continue;              // he is drawn running or reacting
-    const x = p.chase ? p.cx : p.x, z = p.chase ? p.cz : p.z;
-    // from behind the striker, anyone standing closer than he is would fill
-    // the screen. They come back the moment the camera swings round.
-    if (!Cam.wide && M.phase === 'bat' && x > CREASE_X - 1.0) continue;
-    const g = proj(x, 0, z);
-    if (g.behind || g.d < 2.5 || g.x < -220 || g.x > VW + 220) continue;
-    Art.shadow(x, z, 0.42, 0.18);
-    if (p.keeper) {
-      drawFigure(x, z, {
-        view: M.phase === 'bat' ? 'front' : 'back', shirt: shirt, cap: 'cap',
-        crouch: 2.2, legL: 40, legR: 40, armL: 44, armR: 44, scale: 0.96,
-      });
-    } else if (p.chase) {
-      const cyc = Math.sin(now() * 14) * 28;
-      drawFigure(x, z, {
-        view: 'front', shirt: shirt, cap: 'cap', lean: 1.4,
-        legL: 16 + cyc, legR: 16 - cyc, armL: 30 - cyc * 0.6, armR: 30 + cyc * 0.6, scale: 0.96,
-      });
-    } else {
-      const w = Math.sin(bob + p.a) * 4;
-      drawFigure(x, z, {
-        view: 'front', shirt: shirt, cap: 'cap',
-        legL: 14, legR: 14, armL: 18 + w, armR: 18 - w, scale: 0.96,
-      });
-    }
-    if (labels || p.chase) {
-      const q = proj(x, 0, z);
-      const size = clamp(15 * q.s * 2.4, 9, 17);
-      ctx.globalAlpha = p.flagged ? 0.95 : 0.6;
-      Art.text(p.name, q.x, q.y + size + 6, size, p.flagged ? PAL.gold : 'rgba(255,255,255,0.9)', 'center', '700');
-      ctx.globalAlpha = 1;
-    }
-    if (p.flagged && !labels) {
-      const q = proj(x, 2.8, z);
-      if (!q.behind) Art.text('!', q.x, q.y, clamp(26 * q.s * 2, 12, 28), PAL.gold);
-    }
+/* One fielder. Standing, chasing, or taking it — and when he is taking it
+   his hands go where the ball is, so the catch is a thing that happens
+   rather than a caption over a ball still travelling. */
+function drawFielder(p, shirt, labels) {
+  const x = p.chase ? p.cx : p.x, z = p.chase ? p.cz : p.z;
+  const g = proj(x, 0, z);
+  if (g.behind || g.d < 3.4 || g.x < -260 || g.x > VW + 260) return;
+  Art.shadow(x, z, 0.42, 0.18);
+
+  if (p.taking) {
+    // arms up for one over his head, out in front for one at the chest,
+    // and he straightens up out of it over the next half second
+    const th = now() - p.taking;
+    const high = Take.y > 1.5;
+    const settle = clamp(th / 0.45, 0, 1);
+    const arm = lerp(high ? 158 : 104, high ? 130 : 70, settle);
+    drawFigure(x, z, {
+      view: 'front', shirt: shirt, cap: 'cap',
+      armL: arm, armR: arm,
+      legL: p.keeper ? 26 - settle * 12 : 15, legR: p.keeper ? 26 - settle * 12 : 15,
+      crouch: p.keeper ? 1.2 * (1 - settle) : 0.3 * (1 - settle),
+      lean: 0.5, scale: 0.96,
+    });
+  } else if (p.keeper) {
+    drawFigure(x, z, {
+      view: M.phase === 'bat' ? 'front' : 'back', shirt: shirt, cap: 'cap',
+      crouch: 2.2, legL: 40, legR: 40, armL: 44, armR: 44, scale: 0.96,
+    });
+  } else if (p.chase) {
+    const cyc = Math.sin(now() * 14) * 28;
+    drawFigure(x, z, {
+      view: 'front', shirt: shirt, cap: 'cap', lean: 1.4,
+      legL: 16 + cyc, legR: 16 - cyc, armL: 30 - cyc * 0.6, armR: 30 + cyc * 0.6, scale: 0.96,
+    });
+  } else {
+    const w = Math.sin(now() * 1.6 + p.a) * 4;
+    drawFigure(x, z, {
+      view: 'front', shirt: shirt, cap: 'cap',
+      legL: 14, legR: 14, armL: 18 + w, armR: 18 - w, scale: 0.96,
+    });
   }
+
+  if (labels || p.chase) {
+    const size = clamp(15 * g.s * 2.4, 9, 17);
+    ctx.globalAlpha = p.flagged ? 0.95 : 0.6;
+    Art.text(p.name, g.x, g.y + size + 6, size, p.flagged ? PAL.gold : 'rgba(255,255,255,0.9)', 'center', '700');
+    ctx.globalAlpha = 1;
+  } else if (p.flagged) {
+    const q = proj(x, 2.8, z);
+    if (!q.behind) Art.text('!', q.x, q.y, clamp(26 * q.s * 2, 12, 28), PAL.gold);
+  }
+}
+
+/* Everyone on the field, drawn back to front.
+
+   Painter's order matters now that the camera stands behind the striker:
+   the keeper is between the lens and the batter, and a fixed draw order put
+   whoever was written last on top regardless of who was actually nearer. So
+   each figure is queued with its own distance from the lens and the queue
+   is sorted before anything is drawn. */
+function sceneActors(theirShirt, labels) {
+  const out = [];
+  const add = (x, z, fn) => {
+    const p = proj(x, 0, z);
+    if (!p.behind && p.d > 1.6) out.push({ d: p.d, fn: fn });
+  };
+  // The stumps are in the queue too. Painting them first put the keeper —
+  // who stands behind them — on top of them from the bowling end, so from
+  // your own mark he appeared to be standing in front of the wicket.
+  add(0, 0, () => drawStumps(0, false));
+  add(PITCH_LEN, 0, () => drawStumps(PITCH_LEN, true));
+  for (const p of M.field) {
+    if (p.bowler) continue;              // he is drawn running or waiting
+    add(fx(p), fz(p), () => drawFielder(p, theirShirt, labels));
+  }
+  add(UMPIRE_X, UMPIRE_Z, drawUmpire);
+  return out;
 }
 
 function drawScene() {
@@ -2397,37 +2689,60 @@ function drawScene() {
   drawGround(T);
   drawSightscreen(T);
   drawCrowd(T);
-  drawStumps(0, false);
-  drawStumps(PITCH_LEN, true);
 
   const theirShirt = M.phase === 'bat' ? PAL.them : PAL.maroonLite;
+  const ourShirt = M.phase === 'bat' ? PAL.maroon : PAL.them;
   const labels = M.showNames && (
     (M.phase === 'bowl' && Bowl.phase === 'setup') ||
     (M.phase === 'bat' && (Bat.phase === 'ready' || Bat.phase === 'runup')));
-  drawField(M.field, theirShirt, labels);
-  drawUmpire();
+  const actors = sceneActors(theirShirt, labels);
+
+  const atDepth = (x, z, fn) => {
+    const p = proj(x, 0, z);
+    actors.push({ d: p.behind ? 999 : p.d, fn: fn });
+  };
 
   if (M.phase === 'bat') {
     const style = Bat.bowler ? Bat.bowler.style : STYLES[0];
     if (Bat.marker) drawLengthMarker(Bat.marker.x, Bat.marker.z, PAL.gold, 0.55);
-    if (Bat.phase === 'runup') drawBowlerRunup(clamp(Bat.t / Bat.runup, 0, 1), theirShirt, style, false);
-    else if (Bat.phase === 'flight') drawBowlerRunup(1, theirShirt, style, false);
-    else drawBowlerReaction(M.bowlerMood, theirShirt);
-
-    if (Chase.on) Chase.draw(PAL.maroon);
-    else { drawNonStriker(); drawStriker(); }
+    if (Bat.phase === 'runup') {
+      const q = clamp(Bat.t / Bat.runup, 0, 1);
+      atDepth(runupX(q, false), BOWLER_Z, () => drawBowlerRunup(q, theirShirt, style, false));
+    } else if (Bat.phase === 'flight') {
+      atDepth(RELEASE_X, BOWLER_Z, () => drawBowlerRunup(1, theirShirt, style, false));
+    } else {
+      atDepth(REACTION_X, 0.5, () => drawBowlerReaction(M.bowlerMood, theirShirt));
+    }
+    if (Chase.on) actors.push({ d: 12, fn: () => Chase.draw(ourShirt) });
+    else {
+      actors.push({ d: 60, fn: () => drawNonStriker(ourShirt) });
+      actors.push({ d: proj(STRIKER_X, 0, STRIKER_Z).d, fn: drawStriker });
+    }
+    actors.sort((a, b) => b.d - a.d);
+    actors.forEach(a => a.fn());
 
     if (!Bat.swung && Bat.phase !== 'result') {
       drawShotFan(Bat.zone, Bat.phase === 'ready', screenFromAim(Bat.aim.ang));
     }
     if (Bat.ghost && Bat.phase === 'result') drawGhost(Bat.ghost);
   } else {
-    if (Chase.on) Chase.draw(PAL.them);
-    else drawFacingBatter();
-
-    if (Bowl.phase === 'runup') drawBowlerRunup(clamp(Bowl.t / 1.6, 0, 1), PAL.maroonLite, M.style, true);
-    else if (Bowl.phase === 'flight' || Bowl.phase === 'result') drawBowlerRunup(1, PAL.maroonLite, M.style, true);
-    else drawBowlerReaction(0, PAL.maroonLite);
+    if (Chase.on) actors.push({ d: 12, fn: () => Chase.draw(ourShirt) });
+    else {
+      actors.push({ d: proj(STRIKER_X, 0, STRIKER_Z).d, fn: drawFacingBatter });
+      actors.push({ d: 60, fn: () => drawNonStriker(theirShirt) });
+    }
+    if (Bowl.phase === 'runup') {
+      const q = clamp(Bowl.t / 1.6, 0, 1);
+      atDepth(runupX(q, true), BOWLER_Z, () => drawBowlerRunup(q, PAL.maroonLite, M.style, true));
+    } else if (Bowl.phase === 'flight' || Bowl.phase === 'result') {
+      atDepth(RELEASE_X, BOWLER_Z, () => drawBowlerRunup(1, PAL.maroonLite, M.style, true));
+    } else {
+      // setting your field: he is back at his mark, not standing on a length
+      const t = Bowl.t;
+      atDepth(bowlerWaitX(t), BOWLER_Z, () => drawBowlerWaiting(t, PAL.maroonLite));
+    }
+    actors.sort((a, b) => b.d - a.d);
+    actors.forEach(a => a.fn());
 
     if (Bowl.phase === 'setup') {
       const band = Bowl.delivery().bouncer ? BOUNCER_BAND : bandFor(Bowl.target.x);
