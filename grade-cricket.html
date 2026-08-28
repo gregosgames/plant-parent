@@ -613,8 +613,11 @@ const NEAR = 0.9;
    lens, which is the only way to get the far batter big enough to read
    without the men at mid-off filling the frame. */
 const CAMS = {
-  bat:  { x: PITCH_LEN + 10.4, y: 4.10, z: -0.35, yaw: 0,       pitch: 0.265, f: 950 },
-  bowl: { x: -22.0,            y: 4.20, z:  0.30, yaw: Math.PI, pitch: 0.101, f: 2100 },
+  // Close in and low behind the striker, so he is a foreground character
+  // rather than a figure in the middle distance — about a quarter of the
+  // frame, with the pitch opening out past his shoulder.
+  bat:  { x: PITCH_LEN + 7.6, y: 3.10, z: -0.35, yaw: 0,       pitch: 0.220, f: 900 },
+  bowl: { x: -22.0,           y: 4.20, z:  0.30, yaw: Math.PI, pitch: 0.101, f: 2100 },
 };
 
 const wrapPi = a => { while (a > Math.PI) a -= TAU; while (a < -Math.PI) a += TAU; return a; };
@@ -757,8 +760,8 @@ function figureAnchors(x, z, o) {
   const H = o.height * u;
   const hip = { x: g.x + o.lean * u * 0.06, y: g.y - H * 0.50 + o.crouch * u * 0.12 };
   const shoulder = { x: hip.x + o.lean * u * 0.10, y: hip.y - H * 0.30 };
-  const headR = H * 0.078;
-  return { g, u, H, hip, shoulder, headR, lw: Math.max(1.7, u * 0.056) };
+  const headR = H * 0.070;               // small head, long limbs
+  return { g, u, H, hip, shoulder, headR, lw: Math.max(1.7, u * 0.052) };
 }
 
 function drawHead(head, headR, o, u, dirHint) {
@@ -788,7 +791,7 @@ function drawHead(head, headR, o, u, dirHint) {
    band across the chest and a wide collar. Eight shapes a figure was always
    the budget; this spends two of them on saying which decade it is. */
 function drawTorso(shoulder, hip, u, colour, trim) {
-  const sw = u * 0.20, hw = u * 0.15;
+  const sw = u * 0.175, hw = u * 0.135;
   ctx.fillStyle = colour;
   ctx.beginPath();
   ctx.moveTo(shoulder.x - sw, shoulder.y);
@@ -1682,6 +1685,13 @@ const Input = {
     });
   },
   charging() { return this.down || !!this.keys.Space; },
+  /* How long the thumb has been down. Hold time is intent, so this is the
+     number the power meter draws. */
+  heldFor() {
+    if (this.down) return now() - this.downT;
+    if (this.keys.Space && this.keyDownT.Space) return now() - this.keyDownT.Space;
+    return 0;
+  },
   takeTap() { return this.taps.shift(); },
   takeRelease() { return this.releases.shift(); },
   flush() { this.taps.length = 0; this.releases.length = 0; },
@@ -2486,6 +2496,51 @@ function drawShotFan(active, dim, aimDeg) {
   }
 }
 
+/* ===================== POWER =====================
+   Hold time is intent — tap for control, hold to attack, hold from before he
+   lets go to premeditate — and until now none of that was visible. You found
+   out how hard you had swung by getting caught at midwicket.
+
+   Three segments because there are three shot types, and the two boundaries
+   are the exact thresholds the swing reads, so what the bar shows is what the
+   game does. It only exists while the thumb is down. */
+const POWER = { control: 0.15, attack: 0.42, max: 0.58 };
+
+function powerBand(held, early) {
+  if (early) return { name: 'PREMEDITATED', col: '#e05a2b', i: 2 };
+  if (held > POWER.attack) return { name: 'BIG SHOT', col: '#e05a2b', i: 2 };
+  if (held > POWER.control) return { name: 'ATTACK', col: PAL.gold, i: 1 };
+  return { name: 'CONTROL', col: '#dfe6ea', i: 0 };
+}
+
+function drawPowerMeter() {
+  if (M.phase !== 'bat' || Bat.swung) return;
+  if (Bat.phase !== 'runup' && Bat.phase !== 'flight') return;
+  if (!Input.charging()) return;
+
+  const early = Bat.earlyHold;
+  const held = clamp(Input.heldFor(), 0, POWER.max);
+  const band = powerBand(held, early);
+  const w = 236, h = 16, x = VW / 2 - w / 2, y = VH - 62;
+
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  ctx.fillRect(x - 3, y - 3, w + 6, h + 6);
+  ctx.fillStyle = 'rgba(255,255,255,0.14)';
+  ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = band.col;
+  ctx.fillRect(x, y, w * (early ? 1 : held / POWER.max), h);
+
+  // the two thresholds, drawn where they actually are
+  ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 2;
+  [POWER.control, POWER.attack].forEach(t => {
+    const tx = x + w * (t / POWER.max);
+    ctx.beginPath(); ctx.moveTo(tx, y); ctx.lineTo(tx, y + h); ctx.stroke();
+  });
+  ctx.strokeStyle = 'rgba(255,255,255,0.75)'; ctx.lineWidth = 2;
+  ctx.strokeRect(x, y, w, h);
+  Art.text(band.name, VW / 2, y - 10, 21, band.col);
+}
+
 /* Intended against actual, so error is attributable to the input. */
 function drawGhost(g) {
   if (!g) return;
@@ -3006,9 +3061,7 @@ function drawHUD() {
     }
     drawMeter(40, 112, 300, 20, M.swagger, 'SWAGGER', M.swagger >= 0.999);
     if (M.swagger >= 0.999) Art.text('HOLD FOR THE FLOURISH', 40, 156, 17, PAL.gold, 'left');
-    if (Bat.phase === 'runup' && Input.charging()) {
-      Art.text('BACKLIFT UP', VW / 2, VH - 34, 22, PAL.gold);
-    }
+
   } else {
     const ov = Math.floor(w.balls / 6) + '.' + (w.balls % 6);
     drawScorebar([
@@ -3317,6 +3370,7 @@ function frame(ts) {
       M.flash = Math.max(0, M.flash - dt * 6);
     }
     drawBroadcast();                     // the picture, before the graphics
+    drawPowerMeter();
     drawBowlUI();
     drawHUD();
     drawBanner();

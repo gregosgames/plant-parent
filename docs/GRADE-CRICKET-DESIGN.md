@@ -368,6 +368,13 @@ frame makes obvious that a keyframed arc does not:
   of his height to 96%, up over his head. Lifting the arms with the bat was
   what made the first pass look like somebody raising an axe.
 
+**The striker is a foreground character.** The batting camera moved in to
+about seven and a half metres behind him and dropped to head height, which
+takes him from a fifth of the frame to a quarter and opens the pitch out past
+his shoulder. The figures also lost some bulk — a smaller head and longer,
+thinner limbs — because at that size the chunky proportions read as a mascot
+rather than a cricketer.
+
 **And they are side on.** They were drawn on the facing rig, square to the
 camera, which is not how anybody stands at a crease. All four — striker,
 non-striker, the batter you bowl at and the two of them running — now use the
@@ -385,6 +392,23 @@ bowler. That is §1's Presence, and it costs nothing mechanically.
 Archetype, not portrait — what is lifted is the shape of the movement and
 nothing else. The AI batter you bowl at plays off the same table, so his shots
 read too.
+
+### The power bar
+
+Hold time has always been intent — tap for control, hold to attack, hold from
+before he lets go to premeditate — and none of it was visible. You found out
+how hard you had swung by getting caught at midwicket.
+
+A bar appears at the bottom of the frame while the thumb is down, in three
+segments, with the two dividers drawn at the exact thresholds the swing reads:
+0.15s and 0.42s. CONTROL, ATTACK, BIG SHOT, and PREMEDITATED when the press
+came before release. Checked against the swing's own decision at seven hold
+times and on an early hold, the bar and the shot agree every time — which is
+the only property that matters, because a power meter that lies is worse than
+no power meter.
+
+It replaces the BACKLIFT UP caption, which was saying one part of the same
+thing in words.
 
 ### The 1980s pass
 
