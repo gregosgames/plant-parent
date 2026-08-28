@@ -562,21 +562,39 @@ is, and a caption before the first ball naming the fixture, the ground, the
 light, the format and the difficulty. It costs one screen and four constants,
 and it is the difference between a test harness and a game with a world.
 
-### Two formats, two ways to play
+### Four formats, two ways to play
 
-**ONE DAY** is coloured clothing, a ring field and a total to chase. **TEST**
-is whites, a slip cordon and a side in no hurry — the AI's urgency, which
-drives how hard it swings, is scaled down rather than switched off, so a Test
-innings is a different shape rather than a slower one.
+**T5**, **T10** and **ONE DAY** are five, ten and twenty overs of coloured
+clothing, a ring field and a total to chase; the AI's patience rises with the
+length, so twenty overs is a different innings rather than four times the same
+one. **TEST** is whites, a slip cordon, twenty overs — and two innings each,
+which is eighty overs of cricket and the longest thing in the game by some way.
 
-**WHOLE TEAM** bats the innings and bowls every over, choosing who takes each
-one off a four-man attack that includes you. **MY PLAYER** is the design's
-original: you bat at your own number and bowl your own spell, and the rest is
-your team-mates'. Your number is a real decision, because it decides the
-situation you walk into — opening is a fresh sheet, coming in at seven is four
-down with the overs going, and at eleven your side may already be past a
-hundred. Every over you do not bowl is simmed with your team-mates' figures
-going on the card like anybody else's.
+Two innings is a real change of shape rather than a label. Your first innings
+sets a total nobody is chasing, because there is nothing to chase yet; their
+first innings is played out to ten wickets or the overs with no target on the
+board; you bat again, and only the fourth innings of the four has a number to
+get. The match is decided on aggregate, the scorecard grows a pair of innings
+tabs, and the break between the second and third innings says what the lead is
+instead of pretending a total is being defended.
+
+**WHOLE TEAM** means what it says now. It used to bat the whole innings and
+score all of it to one man's line, which is the same game as MY PLAYER with a
+different label on it — the user's word for it was "still locked on the
+player", and that was exactly right. You now bat all eleven: the innings runs
+to ten wickets or the overs, a dismissal brings the next man out, the two
+batters cross on the odd runs and change ends with the over, and every line on
+the card is filled in as it happens. One of the eleven is your player, and
+the cap you chose is on his head and nobody else's. You bowl every over too,
+choosing who takes each one — including the first — off a four-man attack.
+
+**MY PLAYER** is the design's original: you bat at your own number and bowl
+your own spell. Your number is a real decision, because it decides the
+situation you walk into — opening is a fresh sheet, coming in at seven is six
+down with the overs going. What was already gone when you got there is priced
+off the format rather than at a flat ten runs a wicket, which is why a
+twenty-over total no longer reads like a Test score. Your spell is a quarter
+of the innings, capped at four overs where a real one is.
 
 Season and career stay parked, as agreed, until the ball-by-ball game settles.
 
@@ -655,6 +673,163 @@ match now. It is worth writing down because the balance figures in this
 document are measured by driving the shipped state machines, and the harness
 had been quietly stopping at the same place.
 
+### The stops, and the things that were not moving
+
+Four seconds of the game were wrong in ways a scorecard never shows.
+
+**The bowler teleported.** The run-up was drawn off the clock and the tap that
+times the release was drawn off the sweep bar, so tapping the beat early — which
+is most taps — abandoned him wherever he stood and painted him at the crease on
+the next frame. He now covers the last of the ground in a stride and then
+follows through: on down the pitch, veering to the off, arm coming across, over
+about a second. The reaction pose that used to stand halfway down the wicket
+moved to where the follow-through ends, so there is no second jump either. The
+run-up itself was shortened from 1.6s to 1.15s, because a run-up nobody ever
+sees the end of is not a run-up.
+
+**There was no stop between overs.** A five-over innings ran as one continuous
+ball. The end of an over is now a screen: what it cost, what the side is on,
+who is on strike, and who has the next one — and the ends change while you are
+looking at it.
+
+**Your spell ended in a cut to the result.** Finishing your overs with the
+match still alive threw away the only part of it with any suspense left. The
+remaining overs are simmed as before, but they are now revealed one at a time,
+each with its bowler, its cost and the score after it, so a chase that went to
+the last over reads like one.
+
+**The batter changed clothes to duck.** The flinch pose was drawn in a flat
+house colour with no trim, pads or skin of its own, so every ball left or ducked
+put the man in a different kit for the length of the animation.
+
+**The umpire was a fielder in the wrong shirt**, standing two and a half metres
+behind the stumps and out on the square. He is at the wicket now — level with
+the bowler's stumps, a shoulder's width to the leg side, clear of the arm by
+1.25 m — and dressed like an umpire: the white coat and dark trousers of an
+eighties outside broadcast.
+
+### Wides, corrected
+
+The law was biting on balls the bat could reach. The lines were set at 1.05 m
+off and 0.92 m leg — inside the reach envelope, whose own far edge runs to
+1.36 m — so a ball a batter could have cut was a wide. Worse, the call was made
+where the ball passed the stumps rather than where the batter stands, and a leg
+break that pitched on off and turned away crossed the line by doing exactly
+what a leg break is supposed to do. Measured, one wrist-spin ball in five was
+called wide off a perfect release, and the AI bowled one at you every four
+balls of an over and a half.
+
+The lines are now 1.48 m and 1.24 m, outside the far edge of the reach
+envelope, and the call is made at the crease. The AI's lateral spread came down
+with them — it ran to two thirds of a metre of standard deviation at the easy
+end, and difficulty belongs in the length band, where a batter can feel it.
+A wide is now one ball in twenty to thirty rather than one in four, and
+parking it a metre outside off is still 120 wides in 120 balls.
+
+### The bar across the bottom
+
+The score lived in a caption box in the top corner. It named the striker and
+his score and nothing else — you could not see who was at the other end, you
+could not see what the bowler had taken or what he had gone for, and while you
+were bowling it named neither batsman. That is fine for one man batting alone
+and useless the moment eleven of them are yours.
+
+It is now the bar a broadcast puts along the bottom of the picture, and it
+carries what one carries: the side and its score, the over count, the state of
+the match, both batsmen with their runs and balls and a dot on whoever is on
+strike, and the bowler with his figures and how many he has sent down. The
+same bar serves both innings with the roles swapped — bowling, it is their
+score, their two batsmen and your own figures.
+
+The state cell says what a caption generator would say: `NEED 38 OFF 24` in a
+chase, `AUS TRAIL BY 167` in a Test, `4 OVERS LEFT` otherwise. Where there is
+no partner to name — MY PLAYER, where you really are the only one of your side
+anybody plays — that cell carries the run rate instead of an invented team-mate.
+
+The power meter moved up to sit clear of it, on one line with its own label,
+and the two bowling buttons came up with it.
+
+### Both sides bat in pairs
+
+Their innings had one man at the crease who faced every ball until he was out,
+which read exactly as badly on their card as it did on ours. They now bat in
+pairs like everybody else: two at the crease, crossing on the odd runs,
+changing ends with the over, the next man in on a wicket. Over a full ten-over
+innings that turns a card with two names on it into one with ten, every man
+having faced balls, and it still balances against the total.
+
+A wicket in WHOLE TEAM also names the man walking out, because with all eleven
+yours that is the event, and leaving it to be inferred from the scorebar was
+how it read as though the innings had ended.
+
+**The format and how you play are remembered.** They reset to defaults on every
+reload, so choosing WHOLE TEAM and coming back later put you in MY PLAYER
+without saying so — which is indistinguishable from the mode not working.
+
+### Two builds out of one file
+
+`grade-cricket.html` is the whole game. `grade-cricket-batting.html` is the
+same file with one constant flipped: `BAT_ONLY`. It drops the bowling half and
+turns every match into a chase — the opposition's innings is filled in as a
+real card with a total, and you go and get it. That is the shape to submit to
+a portal first, because the batting loop is the one that carries the game and
+it is the one a player understands in four seconds.
+
+The batting build hides the BOWLING practice mode and leaves TEST off the
+format row, because two innings needs a bowling half and offering it would be
+a lie. Everything else is the same code: same difficulties, same formats, same
+WHOLE TEAM and MY PLAYER, same scorecard, same leaderboard, same ticker — whose
+state cell was already able to say `NEED 38 OFF 24`, so a chase reads correctly
+with nothing added.
+
+`python3 tools/build-batting.py` writes the second file. There is still no
+build step to *run* either one: both are self-contained HTML.
+
+### Typing your own name
+
+The name was a button that cycled a pool of twelve. A canvas has no text field
+and a phone has no keyboard until something asks for one — and a hidden DOM
+input is not the answer, because iOS will not focus one outside a real gesture
+handler, so the keyboard never appears. The letters are on screen instead, and
+a physical keyboard drives the same buffer for anybody who has one. Sixteen
+characters, letters, digits, space, apostrophe, hyphen and full stop; anything
+else is dropped as it is typed. RANDOM is still there for people who would
+rather not.
+
+### The difficulty setting describes the opposition, not the world
+
+Two things were wrong, and the second was the interesting one.
+
+**The windows were too tight.** The middle window was fifty-two milliseconds —
+a frame and a half — and nothing about the difficulty setting widened it; the
+levels moved pace, waywardness, the length marker, the ground and the field,
+but never the one number that decides whether a swing middles. The base windows
+are wider now and each level scales them: easy 1.22, medium 1.12, hard 1.06.
+
+Widening them all equally made easy *more* dangerous, which took a while to
+see: every ball a beginner used to miss harmlessly became a nick he could be
+caught off. The outer band has its own multiplier now — 0.72 on easy — so those
+go back to being plays and misses, which cost nothing but the ball.
+
+**And the setting was applied to the world rather than to the opposition.** On
+easy the ball was slower, the ring slower, the boundary shorter and the field
+sloppier — all of which helped you bat, and all of which also helped *them*,
+because when you were bowling it was your own pace off the ball, your own
+fielders standing still and your own short boundary. Measured, an accurate
+spell went for 5.7 an over on EASY and 3.7 on HARD: bowling was hardest at the
+easy end. Nobody would report that as a bug; they would conclude the bowling
+half did not work.
+
+Your arm is your arm and your fielders are your fielders, so both are now
+constant across the settings, and what varies is the side you are playing:
+their bowler's pace and accuracy when you bat, their batter's timing when you
+bowl. Both of the AI batter's numbers now point the same way — they used to
+disagree, with the opposition timing the ball *best* on EASY.
+
+Measured after, an accurate spell goes for 2.4–4.0 an over on easy, 3.4–5.5 on
+medium and 4.7–6.4 on hard, and being accurate is worth about a run an over at
+every setting.
+
 ### Where this departs from the document
 
 - **The flourish has no dedicated modifier button.** It fires on a full meter
@@ -685,52 +860,52 @@ had been quietly stopping at the same place.
   makes line and length one read instead of two, and the leg-side imprecision
   the old camera had is gone.
 
-### Measured balance (600-ball samples)
+### Measured balance (800-ball samples)
 
-Batting, by how well the player times *and* places, on all three difficulties.
-The same scripted thumb plays every row:
+Batting, by how well the player times *and* places. The same scripted thumb
+plays every row, after the difficulty pass:
 
 | Difficulty | Timing | Boundary every | SR | Dot | 1s | 2s | Out |
 |---|---|---|---|---|---|---|---|
-| Easy | new player, 140 ms | 8.8 balls | 72 | 57% | 23% | 2% | 6.8% |
-| Easy | competent, 60 ms | 3.6 balls | 156 | 31% | 32% | 6% | 3.5% |
-| Easy | expert, 35 ms | 2.3 balls | 216 | 22% | 28% | 6% | 0.8% |
-| Medium | new player, 140 ms | 18.2 balls | 48 | 62% | 21% | 3% | 8.7% |
-| Medium | competent, 60 ms | 5.8 balls | 116 | 38% | 31% | 8% | 6.3% |
-| Medium | expert, 35 ms | 3.9 balls | 146 | 36% | 29% | 8% | 1.7% |
-| Hard | new player, 140 ms | 66.7 balls | 19 | 76% | 9% | 2% | 11.2% |
-| Hard | competent, 60 ms | 33.3 balls | 61 | 54% | 28% | 11% | 4.8% |
-| Hard | expert, 35 ms | 9.2 balls | 106 | 42% | 27% | 18% | 2.2% |
+| Easy | new player, 140 ms | 5.5 balls | 99 | 52% | 18% | 4% | 7.6% |
+| Easy | competent, 60 ms | 2.0 balls | 230 | 22% | 21% | 6% | 1.9% |
+| Easy | expert, 35 ms | 1.8 balls | 254 | 18% | 22% | 4% | 0.6% |
+| Medium | new player, 140 ms | 9.1 balls | 69 | 59% | 16% | 4% | 10.1% |
+| Medium | competent, 60 ms | 3.7 balls | 150 | 37% | 24% | 8% | 2.6% |
+| Medium | expert, 35 ms | 3.0 balls | 172 | 34% | 25% | 6% | 1.9% |
+| Hard | new player, 140 ms | 17.0 balls | 46 | 67% | 14% | 4% | 9.1% |
+| Hard | competent, 60 ms | 6.1 balls | 119 | 43% | 21% | 16% | 3.1% |
+| Hard | expert, 35 ms | 3.2 balls | 182 | 28% | 22% | 16% | 1.9% |
 
-Easy is generous on purpose — the document asks the bottom of the ladder to be.
-The easy-to-hard shock for the same player (SR 156 → 61) is the first-over
-perceptual jump §4 asks for, and it lands in the run distribution rather than
-only in the boundary count: on hard you are pushed off the rope and into
-working the gaps for twos, which go from 6% of balls to 11%.
+Before the pass the same competent player scored at 172 / 112 / 81 and was
+dismissed on 3.5% / 3.2% / 4.2% of balls. Timing still separates skill — 99 to
+254 across the three rows on easy — and the dismissal rate now falls as the
+setting comes down, which it did not before.
 
-Bowling, per over, on medium, against a side going at a five-over tempo:
+Bowling, per over, by difficulty, against a side going at a limited-overs
+tempo:
 
-| Style | Accurate | Sloppy |
-|---|---|---|
-| Fast | 3.6 runs, 4.0 wkts/24 | 4.0 runs, 3.2 wkts/24 |
-| Medium pace | 3.5 runs, 3.8 wkts/24 | 4.5 runs, 3.4 wkts/24 |
-| Finger spin | 4.8 runs, 4.3 wkts/24 | 5.9 runs, 3.2 wkts/24 |
-| Wrist spin | 3.8 runs, 4.9 wkts/24 | 3.9 runs, 4.8 wkts/24 |
+| | Fast, accurate | Fast, sloppy | Wrist, accurate | Wrist, sloppy |
+|---|---|---|---|---|
+| Easy | 3.5 | 4.0 | 2.4 | 5.0 |
+| Medium | 3.4 | 5.1 | 3.9 | 5.5 |
+| Hard | 4.7 | 6.4 | 4.7 | 5.2 |
 
-Spin is the expensive way to bowl and pace is the miserly one; landing it is
-worth about an over's difference either way. Defending a target sharpens all of
-it — asked for 11 an over they go after it and an accurate spell concedes 6.4
-while taking eight wickets in five, and asked for 16 they take the game past
-seven an over whatever you bowl.
+Wides are a ball in twenty to thirty on a fair line and 120 in 120 when you
+park it off the pitch.
 
-Wides bite as intended: a foot outside off is 116 wides in 120 balls, down the
-leg side 110, and a good line 0.
+A WHOLE TEAM innings, played by the competent thumb, comes out where an
+innings should: three to seven men bat, there are partnerships, and the top
+score is a real innings rather than one man facing every ball.
 
 Every figure above comes from driving the shipped `Bat` and `Bowl` state
-machines with a scripted thumb, not from a separate model. Four full matches
-run end to end — across all three difficulties, both formats, both ways to
-play, and batting positions 1, 4, 7 and 11 — and every scorecard column
-balances against the team total with no dismissal left blank.
+machines with a scripted thumb, not from a separate model. Six full matches
+run end to end in the main build — all three difficulties, all four formats,
+both ways to play, batting positions 1, 3, 4, 6, 7 and 11 — and five more in
+the batting-only build; every innings' card balances against its own total, in
+a Test all four of them, with no dismissal left blank. Every screen draws in
+both builds, and every box on every menu sits inside the frame clear of its
+neighbours.
 
 ### Not built
 
