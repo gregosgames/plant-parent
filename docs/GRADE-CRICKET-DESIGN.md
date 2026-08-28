@@ -725,6 +725,46 @@ end, and difficulty belongs in the length band, where a batter can feel it.
 A wide is now one ball in twenty to thirty rather than one in four, and
 parking it a metre outside off is still 120 wides in 120 balls.
 
+### The bar across the bottom
+
+The score lived in a caption box in the top corner. It named the striker and
+his score and nothing else — you could not see who was at the other end, you
+could not see what the bowler had taken or what he had gone for, and while you
+were bowling it named neither batsman. That is fine for one man batting alone
+and useless the moment eleven of them are yours.
+
+It is now the bar a broadcast puts along the bottom of the picture, and it
+carries what one carries: the side and its score, the over count, the state of
+the match, both batsmen with their runs and balls and a dot on whoever is on
+strike, and the bowler with his figures and how many he has sent down. The
+same bar serves both innings with the roles swapped — bowling, it is their
+score, their two batsmen and your own figures.
+
+The state cell says what a caption generator would say: `NEED 38 OFF 24` in a
+chase, `AUS TRAIL BY 167` in a Test, `4 OVERS LEFT` otherwise. Where there is
+no partner to name — MY PLAYER, where you really are the only one of your side
+anybody plays — that cell carries the run rate instead of an invented team-mate.
+
+The power meter moved up to sit clear of it, on one line with its own label,
+and the two bowling buttons came up with it.
+
+### Both sides bat in pairs
+
+Their innings had one man at the crease who faced every ball until he was out,
+which read exactly as badly on their card as it did on ours. They now bat in
+pairs like everybody else: two at the crease, crossing on the odd runs,
+changing ends with the over, the next man in on a wicket. Over a full ten-over
+innings that turns a card with two names on it into one with ten, every man
+having faced balls, and it still balances against the total.
+
+A wicket in WHOLE TEAM also names the man walking out, because with all eleven
+yours that is the event, and leaving it to be inferred from the scorebar was
+how it read as though the innings had ended.
+
+**The format and how you play are remembered.** They reset to defaults on every
+reload, so choosing WHOLE TEAM and coming back later put you in MY PLAYER
+without saying so — which is indistinguishable from the mode not working.
+
 ### Where this departs from the document
 
 - **The flourish has no dedicated modifier button.** It fires on a full meter

@@ -549,6 +549,7 @@ const Save = {
   key: 'grade-cricket-v2',
   data: {
     player: { name: 'YOU', cap: 'helmet', skin: 2, kit: 'whites', order: 4 },
+    format: 't10', playAs: 'player',
     board: [],                           // [{ name, runs, balls, level, when }]
     played: 0, seen: false,
   },
@@ -567,6 +568,18 @@ const Save = {
     try { localStorage.setItem(this.key, JSON.stringify(this.data)); } catch (e) {}
   },
   best() { return this.data.board.length ? this.data.board[0].runs : 0; },
+  /* The format and how you are playing are decisions, not defaults, so they
+     survive a reload. Coming back to find yourself on MY PLAYER again after
+     choosing WHOLE TEAM is the sort of thing that reads as a bug. */
+  applyChoices() {
+    M.format = formatByKey(this.data.format);
+    M.playAs = PLAY_AS.find(a => a.key === this.data.playAs) || PLAY_AS[0];
+  },
+  rememberChoices() {
+    this.data.format = M.format.key;
+    this.data.playAs = M.playAs.key;
+    this.save();
+  },
   /* Innings go on the board sorted by runs, and the board keeps ten. */
   record(entry) {
     this.data.board.push(entry);
@@ -2173,7 +2186,11 @@ const M = {
     this.theirCard = this.theirEleven.map(n => (
       { name: n, runs: 0, balls: 0, out: false, how: 'dnb' }
     ));
+    // Their innings has two men at the crease too. It used to have one, who
+    // faced every ball until he was out — which read exactly as badly on
+    // their card as it did on ours.
     this.theirOut = 0;
+    this.theirStrike = 0; this.theirOther = 1; this.theirNext = 2;
     this.attack.forEach(a => { a.balls = 0; a.runs = 0; a.wickets = 0; });
     if (this.myAttack) this.myAttack.forEach(a => { a.balls = 0; a.runs = 0; a.wickets = 0; });
   },
@@ -2187,12 +2204,27 @@ const M = {
      happens rather than invented at the end, so the scorecard is a record of
      what you actually did to them. */
   theirBatter() {
-    const c = this.theirCard[Math.min(this.theirOut, 10)];
+    const c = this.theirCard[Math.min(this.theirStrike, 10)];
     // The moment a man is on strike he has batted, so the card stops calling
     // him a did-not-bat — which is what it called every unbeaten batsman in
     // an innings that ended on overs rather than on wickets.
     if (c && c.how === 'dnb') c.how = 'not out';
     return c;
+  },
+  theirPartner() {
+    const c = this.theirCard[Math.min(Math.max(0, this.theirOther), 10)];
+    return this.theirOther >= 0 && this.theirOther <= 10 ? c : null;
+  },
+  theirSwap() {
+    if (this.theirOther < 0) return;
+    const t = this.theirStrike; this.theirStrike = this.theirOther; this.theirOther = t;
+  },
+  theirNextBatter() {
+    if (this.theirNext > 10) { this.theirOther = -1; return false; }
+    this.theirStrike = this.theirNext++;
+    const c = this.theirCard[this.theirStrike];
+    if (c.how === 'dnb') c.how = 'not out';
+    return true;
   },
   /* Par, per ball, for the side and the tempo this format asks for. Used
      wherever an innings has to be filled in rather than played. */
@@ -2526,6 +2558,9 @@ const Bat = {
          filled in at the break. */
       if (whole && b.wickets < 10 && b.balls < b.overs * 6 && M.nextBatter()) {
         b.out = false;
+        // Playing all eleven, the next man walking out is the event, so it
+        // is named rather than left to be inferred from the scorebar.
+        M.say('IN: ' + M.striker().name + '   #' + (M.mySlot + 1), false);
       } else { Match.endInnings(); return; }
     }
     if (M.mode !== 'batPractice' && b.balls >= b.overs * 6) { Match.endInnings(); return; }
@@ -2586,7 +2621,7 @@ const Bowl = {
   variUsable() { return !M.style.vari.limited || M.bowl.variLeft > 0; },
 
   buttons() {
-    const y = VH - 92;
+    const y = VH - TICKER.h - 74;      // clear of the ticker along the bottom
     return {
       vari: { x: 40, y: y, w: 300, h: 62,
               label: this.vari ? M.style.vari.label : M.style.stock.label,
@@ -2607,7 +2642,7 @@ const Bowl = {
         else if (this.inBtn(B.bowl, tap)) { this.startRunup(); return; }
       }
       // drag anywhere on the pitch to move the target
-      if (Input.down && Input.y < VH - 110) {
+      if (Input.down && Input.y < VH - TICKER.h - 92) {
         const g = unprojectGround(Input.x, Input.y);
         if (g) {
           this.target.x = clamp(g.x, 10.4, 20.0);
@@ -2877,9 +2912,10 @@ const Bowl = {
                 : Take.who && Take.who.bowler ? 'c & b ' + youAs().name
                 : 'c ' + (Take.who ? Take.who.name.toLowerCase() : 'field') + '  b ' + youAs().name;
         M.theirOut++;
-      }
+        M.theirNextBatter();
+      } else if (o.runs % 2 === 1) { M.theirSwap(); }
     }
-    if (b.balls % 6 === 0) b.variLeft = 2;
+    if (b.balls % 6 === 0) { b.variLeft = 2; M.theirSwap(); }
     M.say(o.label, o.runs >= 4 || o.wicket);
     this.outcome = o;
     this.phase = 'result'; this.t = 0;
@@ -3098,8 +3134,10 @@ Match.simRestOfSpell = function () {
           bat.how = 'b ' + man.name;
           M.theirOut++; b.wickets++; man.wickets++;
           line.wickets++; line.gone.push(bat.name);
-        }
+          M.theirNextBatter();
+        } else if (runs % 2 === 1) { M.theirSwap(); }
       }
+      if (b.balls % 6 === 0) M.theirSwap();
       if (b.wickets >= b.maxWickets) break;
       if (b.target > 0 && b.runs >= b.target) break;
     }
@@ -3203,7 +3241,8 @@ function drawPowerMeter() {
   const held = live ? clamp(Input.heldFor(), 0, POWER.max) : 0;
   const band = live ? powerBand(held, early)
                     : { name: 'HOLD FOR POWER', col: 'rgba(255,255,255,0.55)', i: 0 };
-  const w = 236, h = 16, x = VW / 2 - w / 2, y = VH - 62;
+  // Above the ticker, on one line with its own name, and clear of the fan.
+  const w = 236, h = 16, x = VW / 2 - w / 2, y = VH - TICKER.h - 26;
 
   ctx.fillStyle = 'rgba(0,0,0,0.45)';
   ctx.fillRect(x - 3, y - 3, w + 6, h + 6);
@@ -3220,7 +3259,7 @@ function drawPowerMeter() {
   });
   ctx.strokeStyle = 'rgba(255,255,255,0.75)'; ctx.lineWidth = 2;
   ctx.strokeRect(x, y, w, h);
-  Art.text(band.name, VW / 2, y - 10, 21, band.col);
+  Art.text(band.name, x - 12, y + 13, 17, band.col, 'right');
 }
 
 /* Intended against actual, so error is attributable to the input. */
@@ -3811,52 +3850,132 @@ function drawScorebar(cells) {
   });
 }
 
-function drawHUD() {
-  const b = M.bat, w = M.bowl;
-  ctx.save();
-  if (M.phase === 'bat') {
-    const ov = Math.floor(b.balls / 6) + '.' + (b.balls % 6);
-    const st = M.striker();
-    drawScorebar([
-      { w: 26, bg: PAL.gold, t: '', fg: PAL.ink },
-      { w: 190, bg: '#1c3f6e', t: st.name, fg: PAL.white, size: 20, align: 'left' },
-      { w: 200, bg: '#12294a',
-        t: M.myScore() + '-' + Math.min(10, b.wickets) + '   ' + st.runs + '(' + st.balls + ')',
-        fg: PAL.gold, size: 22 },
-      { w: 130, bg: '#1c3f6e', t: ov + (M.mode === 'batPractice' ? '' : '/' + b.overs) + ' OV', fg: PAL.white, size: 22 },
-      { w: 120, bg: '#12294a', t: b.fours + 'x4  ' + b.sixes + 'x6', fg: PAL.white, size: 20 },
-    ]);
-    if (Bat.bowler) {
-      drawScorebar.tail = 1;
-      ctx.fillStyle = 'rgba(0,0,0,0.30)';
-      ctx.fillRect(VW - 345, BAR.y + 5, 305, BAR.h);
-      ctx.fillStyle = '#12294a'; ctx.fillRect(VW - 350, BAR.y, 305, BAR.h);
-      ctx.fillStyle = PAL.maroonLite; ctx.fillRect(VW - 350, BAR.y, 8, BAR.h);
-      ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = 2;
-      ctx.strokeRect(VW - 350, BAR.y, 305, BAR.h);
-      Art.text(Bat.bowler.name, VW - 332, BAR.y + 22, 21, PAL.white, 'left');
-      Art.text(Bat.bowler.style.name, VW - 332, BAR.y + 40, 16, PAL.gold, 'left');
-    }
-    drawMeter(40, 112, 300, 20, M.swagger, 'SWAGGER', M.swagger >= 0.999);
-    if (M.swagger >= 0.999) Art.text('HOLD FOR THE FLOURISH', 40, 156, 17, PAL.gold, 'left');
+/* The bar across the bottom of a television picture, which is the only place
+   this information has ever belonged: who is batting and what he has made,
+   who is at the other end, who is bowling and what it has cost him, and what
+   the situation is. It replaces a scorebar in the top corner that named the
+   striker and nothing else — you could not see the partnership, you could not
+   see the bowler's figures, and while bowling you could not see either
+   batsman's name at all. */
+const TICKER = { h: 54 };
 
+function tickerCell(x, w, bg, lines) {
+  ctx.fillStyle = bg;
+  ctx.fillRect(x, VH - TICKER.h, w, TICKER.h);
+  ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(x + w, VH - TICKER.h); ctx.lineTo(x + w, VH); ctx.stroke();
+  const pad = 14;
+  if (lines.length === 1) {
+    const L = lines[0];
+    const sz = fitText(L.t, w - pad * 2, L.size || 26, L.weight);
+    Art.text(L.t, x + w / 2, VH - TICKER.h / 2 + sz * 0.36, sz, L.col, 'center', L.weight);
   } else {
-    const ov = Math.floor(w.balls / 6) + '.' + (w.balls % 6);
-    drawScorebar([
-      { w: 26, bg: PAL.gold, t: '', fg: PAL.ink },
-      { w: 176, bg: '#1c3f6e', t: M.style.name, fg: PAL.white, size: 20, align: 'left' },
-      { w: 150, bg: '#12294a', t: w.runs + '-' + w.wickets, fg: PAL.gold, size: 32 },
-      { w: 130, bg: '#1c3f6e', t: ov + (M.mode === 'bowlPractice' ? '' : '/' + w.overs) + ' OV', fg: PAL.white, size: 22 },
-      { w: 150, bg: '#12294a', t: w.target ? 'NEED ' + Math.max(0, w.target - w.runs) : 'PRACTICE',
-        fg: PAL.white, size: 20 },
-    ]);
+    lines.forEach((L, i) => {
+      const sz = fitText(L.t, w - pad * 2, L.size || 20, L.weight);
+      Art.text(L.t, x + pad, VH - TICKER.h + 23 + i * 21, sz, L.col, 'left', L.weight);
+    });
+  }
+  return x + w;
+}
+
+/* A batsman's cell: name, runs, balls, and a dot on whoever is on strike. */
+function tickerBatter(x, w, c, onStrike) {
+  tickerCell(x, w, onStrike ? '#173a63' : '#12294a', [
+    { t: (onStrike ? '\u25CF ' : '') + (c ? c.name : '—'), size: 20,
+      col: onStrike ? PAL.white : 'rgba(255,255,255,0.80)' },
+    { t: c ? c.runs + ' (' + c.balls + ')' : '', size: 19,
+      col: onStrike ? PAL.gold : 'rgba(232,185,35,0.75)' },
+  ]);
+  return x + w;
+}
+
+function overStr(balls) { return Math.floor(balls / 6) + '.' + (balls % 6); }
+
+/* What the situation is, in the words a caption generator would use. */
+function tickerState(batting) {
+  if (M.mode !== 'match') return 'PRACTICE';
+  const w = M.bowl, b = M.bat;
+  if (!batting && w.target > 0) {
+    const need = Math.max(0, w.target - w.runs);
+    const left = Math.max(0, w.overs * 6 - w.balls);
+    return 'NEED ' + need + ' OFF ' + left;
+  }
+  if (M.format.innings === 2) {
+    const ours = Match.ourRuns() + (batting ? M.myScore() : 0);
+    const theirs = Match.theirRuns() + (batting ? 0 : w.runs);
+    const d = batting ? ours - theirs : theirs - ours;
+    const who = batting ? M.us.code : M.oppo.code;
+    if (d === 0) return 'SCORES LEVEL';
+    return who + (d > 0 ? ' LEAD BY ' + d : ' TRAIL BY ' + (-d));
+  }
+  const o = batting ? b : w;
+  const left = Math.max(0, o.overs * 6 - o.balls);
+  return left <= 0 ? 'LAST BALL' : Math.ceil(left / 6) + ' OVERS LEFT';
+}
+
+function drawTicker() {
+  if (Match.screen !== 'match' && Match.screen !== 'overEnd') return;
+  const batting = M.phase === 'bat';
+  const b = M.bat, w = M.bowl;
+  const side = batting ? M.us : M.oppo;
+  const score = batting ? M.myScore() + '-' + Math.min(10, b.wickets)
+                        : w.runs + '-' + w.wickets;
+  const balls = batting ? b.balls : w.balls;
+  const overs = batting ? b.overs : w.overs;
+  const strike = batting ? M.striker() : M.theirBatter();
+  const other = batting ? (M.myOther >= 0 ? M.myCard[M.myOther] : null) : M.theirPartner();
+  // whoever has the ball, with what it has cost him
+  const bowler = batting ? Bat.bowler : youAs();
+  const bowlSide = batting ? M.oppo : M.us;
+
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.fillRect(0, VH - TICKER.h - 5, VW, 5);
+
+  let x = 0;
+  x = tickerCell(x, 92, PAL.maroon, [{ t: side.code, size: 30, col: PAL.gold }]);
+  x = tickerCell(x, 150, '#0d1f3a', [{ t: score, size: 34, col: PAL.gold }]);
+  x = tickerCell(x, 118, '#12294a', [
+    { t: 'OVERS', size: 14, col: 'rgba(255,255,255,0.6)' },
+    { t: overStr(balls) + (M.mode === 'match' ? '/' + overs : ''), size: 21, col: PAL.white }]);
+  x = tickerCell(x, 214, '#1c3f6e', [{ t: tickerState(batting), size: 21, col: PAL.white }]);
+  x = tickerBatter(x, 300, strike, true);
+  // With no partner modelled — MY PLAYER, where you are the only one of your
+  // side anybody plays — the cell says what the innings is worth instead.
+  if (other) x = tickerBatter(x, 240, other, false);
+  else {
+    const rr = balls > 0 ? ((batting ? M.myScore() : w.runs) / balls * 6).toFixed(1) : '0.0';
+    x = tickerCell(x, 240, '#12294a', [
+      { t: 'RUN RATE', size: 14, col: 'rgba(255,255,255,0.6)' },
+      { t: rr + ' an over', size: 20, col: 'rgba(255,255,255,0.85)' }]);
+  }
+  const figs = bowler && bowler.balls !== undefined
+    ? bowler.wickets + '-' + bowler.runs + '  (' + overStr(bowler.balls) + ')' : '';
+  tickerCell(x, VW - x, '#12294a', [
+    { t: bowlSide.code + '   ' + (bowler ? bowler.name : ''), size: 19, col: PAL.white },
+    { t: figs, size: 19, col: PAL.gold }]);
+
+  ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 2;
+  ctx.strokeRect(0, VH - TICKER.h, VW, TICKER.h);
+}
+
+function drawHUD() {
+  ctx.save();
+  drawTicker();
+  if (M.phase === 'bat') {
+    drawMeter(40, 58, 300, 20, M.swagger, 'SWAGGER', M.swagger >= 0.999);
+    if (M.swagger >= 0.999) Art.text('HOLD FOR THE FLOURISH', 40, 102, 17, PAL.gold, 'left');
+    if (Bat.bowler) {
+      Art.text(Bat.bowler.style.name, VW - 40, 58, 19, PAL.gold, 'right');
+    }
+  } else {
+    Art.text(M.style.name, 40, 58, 22, PAL.white, 'left');
     Art.text('BATTER', VW - 178, 46, 15, 'rgba(255,255,255,0.75)', 'left');
     ctx.fillStyle = 'rgba(0,0,0,0.40)'; ctx.fillRect(VW - 178, 54, 138, 12);
     ctx.fillStyle = M.batterConf > 0.55 ? '#5fd07a' : M.batterConf > 0.3 ? '#e8b923' : '#d0483f';
     ctx.fillRect(VW - 178, 54, 138 * clamp(M.batterConf, 0, 1), 12);
   }
   if (Chase.on && Chase.shown > 0) {
-    Art.text(Chase.shown + (Chase.shown === 1 ? ' RUN' : ' RUNS'), VW / 2, VH - 40, 34, PAL.gold);
+    Art.text(Chase.shown + (Chase.shown === 1 ? ' RUN' : ' RUNS'), VW / 2, VH - 96, 34, PAL.gold);
   }
   ctx.restore();
 }
@@ -4042,8 +4161,11 @@ function drawMenu() {
   else if (id === 'BOWLING') Match.toGear(Match.level, 'bowlPractice');
   else if (id === 'MY PLAYER') Match.screen = 'player';
   else if (id === 'LEADERBOARD') Match.screen = 'board';
-  else if (id && id.indexOf('FMT') === 0) M.format = FORMATS.find(f => f.key === id.slice(3));
-  else if (id && id.indexOf('AS') === 0) M.playAs = PLAY_AS.find(a => a.key === id.slice(2));
+  else if (id && id.indexOf('FMT') === 0) {
+    M.format = formatByKey(id.slice(3)); Save.rememberChoices();
+  } else if (id && id.indexOf('AS') === 0) {
+    M.playAs = PLAY_AS.find(a => a.key === id.slice(2)) || M.playAs; Save.rememberChoices();
+  }
   else if (id) { const L = LEVELS.find(v => v.name === id); if (L) Match.level = L; }
 }
 
@@ -4571,6 +4693,7 @@ function boot() {
   canvas = document.getElementById('game');
   ctx = canvas.getContext('2d');
   Save.load();
+  Save.applyChoices();
   Portal.init();
   Portal.loadStart();
   Input.init(canvas);
