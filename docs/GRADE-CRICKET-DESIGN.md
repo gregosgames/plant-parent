@@ -267,16 +267,18 @@ The walk-back input is gone; the long walk now just happens, as feedback. The
 bouncer is no longer a separate button — it is the fast bowler's variation, on
 the same one button every other style uses for theirs.
 
-**Six styles, and the difference is in the ball, not the input.**
+**Four styles, and the difference is in the ball, not the input.**
 
 | Style | Pace | Stock | Variation | What moves |
 |---|---|---|---|---|
-| Fast | 21.4–23.6 | — | Bouncer (2 an over) | Nothing. Just pace and bounce. |
-| Swing | 19.4–21.2 | Outswinger | Inswinger | Sideways **in the air**, before it pitches |
-| Seam | 19.2–21.0 | Seam away | Seam in | **Off the pitch**, and never quite the same twice |
-| Medium pace | 17.0–18.8 | Stock | Slower ball | A little swing; the variation loops and dips |
+| Fast | 21.0–23.4 | Outswinger | Inswinger | Sideways **in the air**, before it pitches. Pick which way. |
+| Medium pace | 17.0–19.0 | Stock | Slower ball | A little swing; the variation loops and dips |
 | Finger spin | 13.0–14.6 | Off break | Arm ball | Turns **in** to a right-hander, off the pitch |
 | Wrist spin | 11.8–13.6 | Leg break | Googly | Turns **away**. The googly does not. |
+
+Swing and seam were separate styles doing nearly the same job. Swing folded
+into FAST, where it is the choice between the two deliveries rather than a
+style you commit to for a match; seam went.
 
 Swing is a lateral acceleration applied only before the bounce; turn is a
 lateral velocity handed over only at the bounce. Both are folded into the same
@@ -507,15 +509,16 @@ already needs their full attention, and its main mechanical job — widening the
 AI batter's error — was doing work that accuracy and ball movement already do
 more honestly. Removing it left the bowling scheme as target, beat, variation,
 and the batter's confidence tick to tell you whether it is working. It also
-un-suppressed the run rate: a spell now goes for 4.5–6.9 an over rather than
-2–3, which is a real five-over game rather than a stranglehold.
+un-suppressed the run rate. Getting the five-over game to actually look like
+one took two more passes, recorded under *A five-over side bats like one*
+below; a spell now goes for 3.5–5.9 an over rather than 2–3.
 
 **Two tiers became three difficulties.** Village club and island senior were
 career ladder rungs in a slice with no career. EASY / MEDIUM / HARD say the
 same thing to a player who has just arrived, and the three still differ only
 in window widths and distances — pace, waywardness, how long the length marker
 stays up, how fast the field is, and how big the ground is. Measured, the same
-player scores at 220, 151 and 119 across the three.
+competent player scores at a strike rate of 156, 116 and 61 across the three.
 
 **Four bowling styles, not six.** Swing and seam were separate styles doing
 almost the same thing; swing folded into FAST as its two variations, and seam
@@ -590,6 +593,68 @@ across four full matches at different difficulties, formats and batting
 positions: every column balances against the team total and no dismissal is
 blank.
 
+### An edge goes behind square
+
+The reach envelope gave the bat a position, and everything it turns into an
+edge was still flying wherever the shot was pointed — an outside edge off a
+cover drive went to cover. On a scorecard that showed up as the keeper taking
+two thirds of every dismissal on hard, because a soft edge lands near the bat
+and he was the nearest man to it.
+
+An edge is a deflection, so it is modelled as one. Around two in three leave
+the face at an angle of their own and carry on behind square — the cordon sees
+about two thirds of those and fine leg the rest — and the remaining third are
+the thick ones that go roughly where he aimed. They also keep the pace and lose
+the height: a nick that went behind square gets under a third of the lift, so
+most of them run away for runs and only some of them carry. That is why the
+cordon is a lottery rather than a wall, and it is what turns slip from an
+ornament into a fielder who takes thirty catches in a session of slogging.
+
+The keeper is now barred from anything landing in front of the stumps. He was
+eligible for every edge, and with a second of hang time he could cover nine
+metres — so he was sprinting past the batter to take catches that were slip's
+or nobody's. Together the two changes cut the keeper's share of dismissals from
+about two thirds to under a half and put the rest where a scorecard expects
+them: slip, square leg, midwicket, short fine leg.
+
+### A five-over side bats like one
+
+The AI batter was picking a shot properly and then throwing it away. The ring
+stands on the six shot angles, so an unplaced shot is a fielder's catch by
+construction — and he was taking four random guesses at a gap inside twenty
+degrees while the player scans the whole arc. He also had no reason to hurry:
+with no target to chase the required rate was 7.5, which put his urgency at
+almost nothing, so two balls in five were defensive pushes that could not reach
+the ring, let alone the rope.
+
+Both are fixed by the same idea — a batter who is in behaves like one. His
+placement is now three looks plus seven more scaled by his confidence, over a
+span that widens with it, so a set batter finds the gap and a new one hits it
+where the shot points and hopes. And a side batting first in a five-over game
+is not saving anything: the standing rate is 9.5, which is what an innings of
+that length actually is. A Test side is untouched, because its patience scales
+the same term to nothing.
+
+The third piece was *loose*, which decided whether he could stretch for a bad
+ball. It asked for the ball to be wide **and** short or full before it counted,
+so a long hop on the stumps — the easiest delivery in cricket — read the same
+as a good length, and an accurate spell cost the same as a sloppy one. It is
+now a matter of degree, driven by length first and line second.
+
+Measured across the four styles, that moved an accurate spell from 1.5–3.5 an
+over to 3.5–4.8, and it opened a gap accuracy had never had: a sloppy spell now
+costs 0.4 to 1.1 more an over and takes fewer wickets doing it.
+
+### Practice was ending after two overs
+
+`simRestOfSpell` — the MY PLAYER rule that hands your team-mates the overs you
+do not bowl — was firing in bowling practice too. Practice runs to ninety-nine
+overs, so two overs in it simmed the other ninety-seven and dropped the player
+on a result screen having conceded about nine hundred. It is gated to a real
+match now. It is worth writing down because the balance figures in this
+document are measured by driving the shipped state machines, and the harness
+had been quietly stopping at the same place.
+
 ### Where this departs from the document
 
 - **The flourish has no dedicated modifier button.** It fires on a full meter
@@ -601,10 +666,10 @@ blank.
   correct in a two-tier slice. Here it narrows the timing window on short
   balls by 20% instead. The injury curve replaces this when the ladder
   extends.
-- **Ground size and fielding sharpness are tier signals.** The rope is 54 m at
-  club and 62 m at island, and the club ring is slower off the mark and slower
-  to react. Open question 4's "the crowd gets further away" now has a
-  companion: the field gets faster.
+- **Ground size and fielding sharpness are difficulty signals.** The rope is
+  52 m on easy, 56 m on medium and 62 m on hard, and the easy ring is slower
+  off the mark and slower to react. Open question 4's "the crowd gets further
+  away" now has a companion: the field gets faster.
 - **The chasing side accelerates.** The AI batter's aggression scales with the
   required rate, so defending 80 off 30 looks nothing like defending 30. This
   is not in the document; without it a five-over chase had no shape.
@@ -620,42 +685,52 @@ blank.
   makes line and length one read instead of two, and the leg-side imprecision
   the old camera had is gone.
 
-### Measured balance (800-ball samples, `docs` targets in brackets)
+### Measured balance (600-ball samples)
 
-Batting, by how well the player times *and* places:
+Batting, by how well the player times *and* places, on all three difficulties.
+The same scripted thumb plays every row:
 
-| Situation | Boundary every | Dot | 1s | 2s | Out |
-|---|---|---|---|---|---|
-| Club, new player (140 ms, aims down the middle) | 5.6 balls [5–6] | 50% | 21% | 4% | 8.3% |
-| Club, competent (60 ms, aims down the middle) | 2.6 balls | 33% | 18% | 5% | 5.3% |
-| Club, competent (60 ms), picks the gap | 2.2 balls | 22% | 21% | 6% | 5.0% |
-| Island, competent (60 ms), picks the gap | 7.7 balls | 33% | 31% | 22% | 1.5% |
-| Island, expert (35 ms), picks the gap | 3.5 balls | 21% | 30% | 20% | 0.0% |
+| Difficulty | Timing | Boundary every | SR | Dot | 1s | 2s | Out |
+|---|---|---|---|---|---|---|---|
+| Easy | new player, 140 ms | 8.8 balls | 72 | 57% | 23% | 2% | 6.8% |
+| Easy | competent, 60 ms | 3.6 balls | 156 | 31% | 32% | 6% | 3.5% |
+| Easy | expert, 35 ms | 2.3 balls | 216 | 22% | 28% | 6% | 0.8% |
+| Medium | new player, 140 ms | 18.2 balls | 48 | 62% | 21% | 3% | 8.7% |
+| Medium | competent, 60 ms | 5.8 balls | 116 | 38% | 31% | 8% | 6.3% |
+| Medium | expert, 35 ms | 3.9 balls | 146 | 36% | 29% | 8% | 1.7% |
+| Hard | new player, 140 ms | 66.7 balls | 19 | 76% | 9% | 2% | 11.2% |
+| Hard | competent, 60 ms | 33.3 balls | 61 | 54% | 28% | 11% | 4.8% |
+| Hard | expert, 35 ms | 9.2 balls | 106 | 42% | 27% | 18% | 2.2% |
 
-The club tier is generous against target on purpose — the document asks the
-bottom of the ladder to be. The club-to-island shock (2.2 → 7.7) is the
-first-over perceptual jump §4 asks for, and it now lands in the run
-distribution rather than only in the boundary count: at island you are pushed
-into working the gaps for twos.
+Easy is generous on purpose — the document asks the bottom of the ladder to be.
+The easy-to-hard shock for the same player (SR 156 → 61) is the first-over
+perceptual jump §4 asks for, and it lands in the run distribution rather than
+only in the boundary count: on hard you are pushed off the rope and into
+working the gaps for twos, which go from 6% of balls to 11%.
 
-Bowling, per over, at club:
+Bowling, per over, on medium, against a side going at a five-over tempo:
 
 | Style | Accurate | Sloppy |
 |---|---|---|
-| Fast | 2.1 runs, 2.6 wkts/24 | 4.0 runs, 1.7 wkts/24 |
-| Swing | 2.5 runs, 2.1 wkts/24 | 3.2 runs, 1.8 wkts/24 |
-| Seam | 2.4 runs, 1.7 wkts/24 | 3.8 runs, 1.4 wkts/24 |
-| Medium | 2.7 runs, 2.5 wkts/24 | 3.8 runs, 1.9 wkts/24 |
-| Finger spin | 2.9 runs, 1.0 wkts/24 | 6.0 runs, 0.8 wkts/24 |
-| Wrist spin | 2.6 runs, 1.2 wkts/24 | 6.3 runs, 1.5 wkts/24 |
+| Fast | 3.6 runs, 4.0 wkts/24 | 4.0 runs, 3.2 wkts/24 |
+| Medium pace | 3.5 runs, 3.8 wkts/24 | 4.5 runs, 3.4 wkts/24 |
+| Finger spin | 4.8 runs, 4.3 wkts/24 | 5.9 runs, 3.2 wkts/24 |
+| Wrist spin | 3.8 runs, 4.9 wkts/24 | 3.9 runs, 4.8 wkts/24 |
 
-Pace takes wickets; spin is cheap when you land it and expensive when you do
-not. Defending a target sharpens all of it — asked for 16 an over they come at
-you, and an accurate spell holds them to 6.3 and takes 6.4 wickets in five
-overs while a sloppy one concedes 9.6.
+Spin is the expensive way to bowl and pace is the miserly one; landing it is
+worth about an over's difference either way. Defending a target sharpens all of
+it — asked for 11 an over they go after it and an accurate spell concedes 6.4
+while taking eight wickets in five, and asked for 16 they take the game past
+seven an over whatever you bowl.
+
+Wides bite as intended: a foot outside off is 116 wides in 120 balls, down the
+leg side 110, and a good line 0.
 
 Every figure above comes from driving the shipped `Bat` and `Bowl` state
-machines with a scripted thumb, not from a separate model.
+machines with a scripted thumb, not from a separate model. Four full matches
+run end to end — across all three difficulties, both formats, both ways to
+play, and batting positions 1, 4, 7 and 11 — and every scorecard column
+balances against the team total with no dismissal left blank.
 
 ### Not built
 
