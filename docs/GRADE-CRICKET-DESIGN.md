@@ -567,7 +567,8 @@ and it is the difference between a test harness and a game with a world.
 **T5**, **T10** and **ONE DAY** are five, ten and twenty overs of coloured
 clothing, a ring field and a total to chase; the AI's patience rises with the
 length, so twenty overs is a different innings rather than four times the same
-one. **TEST** is whites, a slip cordon, ten overs — and two innings each.
+one. **TEST** is whites, a slip cordon, twenty overs — and two innings each,
+which is eighty overs of cricket and the longest thing in the game by some way.
 
 Two innings is a real change of shape rather than a label. Your first innings
 sets a total nobody is chasing, because there is nothing to chase yet; their
@@ -765,6 +766,70 @@ how it read as though the innings had ended.
 reload, so choosing WHOLE TEAM and coming back later put you in MY PLAYER
 without saying so — which is indistinguishable from the mode not working.
 
+### Two builds out of one file
+
+`grade-cricket.html` is the whole game. `grade-cricket-batting.html` is the
+same file with one constant flipped: `BAT_ONLY`. It drops the bowling half and
+turns every match into a chase — the opposition's innings is filled in as a
+real card with a total, and you go and get it. That is the shape to submit to
+a portal first, because the batting loop is the one that carries the game and
+it is the one a player understands in four seconds.
+
+The batting build hides the BOWLING practice mode and leaves TEST off the
+format row, because two innings needs a bowling half and offering it would be
+a lie. Everything else is the same code: same difficulties, same formats, same
+WHOLE TEAM and MY PLAYER, same scorecard, same leaderboard, same ticker — whose
+state cell was already able to say `NEED 38 OFF 24`, so a chase reads correctly
+with nothing added.
+
+`python3 tools/build-batting.py` writes the second file. There is still no
+build step to *run* either one: both are self-contained HTML.
+
+### Typing your own name
+
+The name was a button that cycled a pool of twelve. A canvas has no text field
+and a phone has no keyboard until something asks for one — and a hidden DOM
+input is not the answer, because iOS will not focus one outside a real gesture
+handler, so the keyboard never appears. The letters are on screen instead, and
+a physical keyboard drives the same buffer for anybody who has one. Sixteen
+characters, letters, digits, space, apostrophe, hyphen and full stop; anything
+else is dropped as it is typed. RANDOM is still there for people who would
+rather not.
+
+### The difficulty setting describes the opposition, not the world
+
+Two things were wrong, and the second was the interesting one.
+
+**The windows were too tight.** The middle window was fifty-two milliseconds —
+a frame and a half — and nothing about the difficulty setting widened it; the
+levels moved pace, waywardness, the length marker, the ground and the field,
+but never the one number that decides whether a swing middles. The base windows
+are wider now and each level scales them: easy 1.22, medium 1.12, hard 1.06.
+
+Widening them all equally made easy *more* dangerous, which took a while to
+see: every ball a beginner used to miss harmlessly became a nick he could be
+caught off. The outer band has its own multiplier now — 0.72 on easy — so those
+go back to being plays and misses, which cost nothing but the ball.
+
+**And the setting was applied to the world rather than to the opposition.** On
+easy the ball was slower, the ring slower, the boundary shorter and the field
+sloppier — all of which helped you bat, and all of which also helped *them*,
+because when you were bowling it was your own pace off the ball, your own
+fielders standing still and your own short boundary. Measured, an accurate
+spell went for 5.7 an over on EASY and 3.7 on HARD: bowling was hardest at the
+easy end. Nobody would report that as a bug; they would conclude the bowling
+half did not work.
+
+Your arm is your arm and your fielders are your fielders, so both are now
+constant across the settings, and what varies is the side you are playing:
+their bowler's pace and accuracy when you bat, their batter's timing when you
+bowl. Both of the AI batter's numbers now point the same way — they used to
+disagree, with the opposition timing the ball *best* on EASY.
+
+Measured after, an accurate spell goes for 2.4–4.0 an over on easy, 3.4–5.5 on
+medium and 4.7–6.4 on hard, and being accurate is worth about a run an over at
+every setting.
+
 ### Where this departs from the document
 
 - **The flourish has no dedicated modifier button.** It fires on a full meter
@@ -795,65 +860,52 @@ without saying so — which is indistinguishable from the mode not working.
   makes line and length one read instead of two, and the leg-side imprecision
   the old camera had is gone.
 
-### Measured balance (600-ball samples)
+### Measured balance (800-ball samples)
 
-Batting, by how well the player times *and* places, on all three difficulties.
-The same scripted thumb plays every row:
+Batting, by how well the player times *and* places. The same scripted thumb
+plays every row, after the difficulty pass:
 
 | Difficulty | Timing | Boundary every | SR | Dot | 1s | 2s | Out |
 |---|---|---|---|---|---|---|---|
-| Easy | new player, 140 ms | 7.8 balls | 78 | 54% | 22% | 3% | 8.5% |
-| Easy | competent, 60 ms | 2.9 balls | 172 | 34% | 23% | 6% | 3.5% |
-| Easy | expert, 35 ms | 1.9 balls | 233 | 23% | 22% | 3% | 1.3% |
-| Medium | new player, 140 ms | 15.0 balls | 50 | 64% | 17% | 3% | 9.2% |
-| Medium | competent, 60 ms | 5.7 balls | 112 | 46% | 25% | 8% | 3.2% |
-| Medium | expert, 35 ms | 3.5 balls | 156 | 35% | 27% | 7% | 2.2% |
-| Hard | new player, 140 ms | 85.7 balls | 21 | 73% | 10% | 3% | 12.3% |
-| Hard | competent, 60 ms | 22.2 balls | 81 | 47% | 26% | 18% | 4.2% |
-| Hard | expert, 35 ms | 7.1 balls | 122 | 39% | 25% | 20% | 1.7% |
+| Easy | new player, 140 ms | 5.5 balls | 99 | 52% | 18% | 4% | 7.6% |
+| Easy | competent, 60 ms | 2.0 balls | 230 | 22% | 21% | 6% | 1.9% |
+| Easy | expert, 35 ms | 1.8 balls | 254 | 18% | 22% | 4% | 0.6% |
+| Medium | new player, 140 ms | 9.1 balls | 69 | 59% | 16% | 4% | 10.1% |
+| Medium | competent, 60 ms | 3.7 balls | 150 | 37% | 24% | 8% | 2.6% |
+| Medium | expert, 35 ms | 3.0 balls | 172 | 34% | 25% | 6% | 1.9% |
+| Hard | new player, 140 ms | 17.0 balls | 46 | 67% | 14% | 4% | 9.1% |
+| Hard | competent, 60 ms | 6.1 balls | 119 | 43% | 21% | 16% | 3.1% |
+| Hard | expert, 35 ms | 3.2 balls | 182 | 28% | 22% | 16% | 1.9% |
 
-Easy is generous on purpose — the document asks the bottom of the ladder to be.
-The easy-to-hard shock for the same player (SR 172 → 81) is the first-over
-perceptual jump §4 asks for, and it lands in the run distribution rather than
-only in the boundary count: on hard you are pushed off the rope and into
-working the gaps for twos, which go from 6% of balls to 18%.
+Before the pass the same competent player scored at 172 / 112 / 81 and was
+dismissed on 3.5% / 3.2% / 4.2% of balls. Timing still separates skill — 99 to
+254 across the three rows on easy — and the dismissal rate now falls as the
+setting comes down, which it did not before.
 
-Bowling, per over, on medium, against a side going at a five-over tempo:
+Bowling, per over, by difficulty, against a side going at a limited-overs
+tempo:
 
-| Style | Accurate | Sloppy |
-|---|---|---|
-| Fast | 3.0 runs, 3.6 wkts/24 | 3.7 runs, 2.6 wkts/24 |
-| Medium pace | 3.0 runs, 3.6 wkts/24 | 3.5 runs, 2.9 wkts/24 |
-| Finger spin | 5.2 runs, 2.9 wkts/24 | 4.7 runs, 2.7 wkts/24 |
-| Wrist spin | 2.3 runs, 3.4 wkts/24 | 3.1 runs, 3.1 wkts/24 |
-
-Spin is the expensive way to bowl and pace is the miserly one; landing it is
-worth about an over's difference either way. Defending a target sharpens all of
-it — asked for 11 an over they go after it and an accurate spell concedes 4.1
-while taking nine wickets in five.
+| | Fast, accurate | Fast, sloppy | Wrist, accurate | Wrist, sloppy |
+|---|---|---|---|---|
+| Easy | 3.5 | 4.0 | 2.4 | 5.0 |
+| Medium | 3.4 | 5.1 | 3.9 | 5.5 |
+| Hard | 4.7 | 6.4 | 4.7 | 5.2 |
 
 Wides are a ball in twenty to thirty on a fair line and 120 in 120 when you
 park it off the pitch.
 
 A WHOLE TEAM innings, played by the competent thumb, comes out where an
-innings should:
-
-| Format | Easy | Medium | Hard |
-|---|---|---|---|
-| T5 | 45-2 | 32-1 | 14-1 |
-| T10 | 90-1 | 70-2 | 25-3 |
-| ONE DAY | 224-1 | 156-5 | 110-4 |
-
-Three to seven men bat, there are partnerships, and the top score is a real
-innings rather than one man facing every ball.
+innings should: three to seven men bat, there are partnerships, and the top
+score is a real innings rather than one man facing every ball.
 
 Every figure above comes from driving the shipped `Bat` and `Bowl` state
 machines with a scripted thumb, not from a separate model. Six full matches
-run end to end — across all three difficulties, all four formats, both ways to
-play, and batting positions 1, 3, 4, 6, 7 and 11 — and every innings' card
-balances against its own total, in a Test all four of them, with no dismissal
-left blank. Every screen draws, and every box on every menu sits inside the
-frame clear of its neighbours.
+run end to end in the main build — all three difficulties, all four formats,
+both ways to play, batting positions 1, 3, 4, 6, 7 and 11 — and five more in
+the batting-only build; every innings' card balances against its own total, in
+a Test all four of them, with no dismissal left blank. Every screen draws in
+both builds, and every box on every menu sits inside the frame clear of its
+neighbours.
 
 ### Not built
 
