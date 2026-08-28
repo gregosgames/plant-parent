@@ -796,6 +796,44 @@ characters, letters, digits, space, apostrophe, hyphen and full stop; anything
 else is dropped as it is typed. RANDOM is still there for people who would
 rather not.
 
+### EASY means easy
+
+The first pass at easing the game moved a competent player from a strike rate
+of 172 to 230, which reads like a big change and is not the one that matters.
+The row that matters is the one a person who has never played this before sits
+in — a hundred and forty milliseconds of timing error — and that player was
+still waiting five and a half balls for a boundary. The brief was a boundary
+every second ball, and it is right: a portal gives a game about four seconds
+to be fun, and "I hit one" is the whole of that.
+
+So easy now helps in four places at once, each of them the honest version of
+what a beginner is actually failing at:
+
+- **The window.** `batWindow` 2.60 on easy against 1.06 on hard, so a middle
+  window that started at sixty-four milliseconds ends up near a hundred and
+  eighty. A 140 ms error middles the ball.
+- **The reach.** `reachMul` 1.55, so the blade gets to almost anything. "I did
+  not even reach that" is the least legible way for a game to say no.
+- **The bat.** `powerMul` 1.34, so a middled shot carries to the rope from a
+  ground that is still the same size — the help is in the bat, not in a short
+  boundary, because a short boundary is the ground and the ground belongs to
+  both innings.
+- **The height.** `liftMul` 0.62, so the ball stays down. This one was found by
+  measurement: with the first three in, the boundary rate was already there but
+  a wicket fell every fifteen balls, nearly all of them skied catches. A
+  boundary every other ball is no use if every third one is a catch.
+
+Measured, a beginner on easy: **a boundary every 1.4 balls, a strike rate of
+299, and a wicket every forty.** Medium is 3.8 balls and hard 16.7, so the
+three settings are three different games rather than three widths of the same
+one.
+
+The batting-only build needed one more number after that. Its chase target was
+par for the *bowling* side, and on easy you now score at three times par, so
+the target was passed in the fourth over. `chasePar` scales it with how freely
+the setting lets you bat — 2.30 on easy, 1.05 on hard — which turns a twenty
+over chase on easy into 260 rather than 110.
+
 ### The difficulty setting describes the opposition, not the world
 
 Two things were wrong, and the second was the interesting one.
@@ -863,45 +901,44 @@ every setting.
 ### Measured balance (800-ball samples)
 
 Batting, by how well the player times *and* places. The same scripted thumb
-plays every row, after the difficulty pass:
+plays every row:
 
-| Difficulty | Timing | Boundary every | SR | Dot | 1s | 2s | Out |
-|---|---|---|---|---|---|---|---|
-| Easy | new player, 140 ms | 5.5 balls | 99 | 52% | 18% | 4% | 7.6% |
-| Easy | competent, 60 ms | 2.0 balls | 230 | 22% | 21% | 6% | 1.9% |
-| Easy | expert, 35 ms | 1.8 balls | 254 | 18% | 22% | 4% | 0.6% |
-| Medium | new player, 140 ms | 9.1 balls | 69 | 59% | 16% | 4% | 10.1% |
-| Medium | competent, 60 ms | 3.7 balls | 150 | 37% | 24% | 8% | 2.6% |
-| Medium | expert, 35 ms | 3.0 balls | 172 | 34% | 25% | 6% | 1.9% |
-| Hard | new player, 140 ms | 17.0 balls | 46 | 67% | 14% | 4% | 9.1% |
-| Hard | competent, 60 ms | 6.1 balls | 119 | 43% | 21% | 16% | 3.1% |
-| Hard | expert, 35 ms | 3.2 balls | 182 | 28% | 22% | 16% | 1.9% |
+| Difficulty | Timing | Boundary every | SR | Dot | Out |
+|---|---|---|---|---|---|
+| Easy | new player, 140 ms | 1.4 balls | 299 | 12% | 2.5% |
+| Easy | competent, 60 ms | 1.3 balls | 318 | 7% | 0.9% |
+| Easy | expert, 35 ms | 1.2 balls | 338 | 5% | 0.8% |
+| Medium | new player, 140 ms | 3.8 balls | 133 | 43% | 6.8% |
+| Medium | competent, 60 ms | 2.0 balls | 225 | 26% | 1.3% |
+| Medium | expert, 35 ms | 1.8 balls | 252 | 20% | 0.9% |
+| Hard | new player, 140 ms | 16.7 balls | 47 | 66% | 11.1% |
+| Hard | competent, 60 ms | 6.3 balls | 116 | 43% | 3.5% |
+| Hard | expert, 35 ms | 4.3 balls | 150 | 38% | 1.3% |
 
-Before the pass the same competent player scored at 172 / 112 / 81 and was
-dismissed on 3.5% / 3.2% / 4.2% of balls. Timing still separates skill — 99 to
-254 across the three rows on easy — and the dismissal rate now falls as the
-setting comes down, which it did not before.
+Easy is a boundary every other ball for somebody who has never played it, which
+is the brief. The three settings are three different games: the beginner row
+runs 1.4 → 3.8 → 16.7 balls a boundary across them.
 
 Bowling, per over, by difficulty, against a side going at a limited-overs
 tempo:
 
 | | Fast, accurate | Fast, sloppy | Wrist, accurate | Wrist, sloppy |
 |---|---|---|---|---|
-| Easy | 3.5 | 4.0 | 2.4 | 5.0 |
-| Medium | 3.4 | 5.1 | 3.9 | 5.5 |
-| Hard | 4.7 | 6.4 | 4.7 | 5.2 |
+| Easy | 4.1 | 4.7 | 3.1 | 4.8 |
+| Medium | 4.6 | 5.0 | 3.1 | 4.3 |
+| Hard | 4.8 | 4.7 | 3.6 | 5.0 |
+
+Landing it is worth about half a run to a run and a half an over at every
+setting, and the opposition scores more freely as the setting goes up rather
+than down.
 
 Wides are a ball in twenty to thirty on a fair line and 120 in 120 when you
 park it off the pitch.
 
-A WHOLE TEAM innings, played by the competent thumb, comes out where an
-innings should: three to seven men bat, there are partnerships, and the top
-score is a real innings rather than one man facing every ball.
-
 Every figure above comes from driving the shipped `Bat` and `Bowl` state
 machines with a scripted thumb, not from a separate model. Six full matches
 run end to end in the main build — all three difficulties, all four formats,
-both ways to play, batting positions 1, 3, 4, 6, 7 and 11 — and five more in
+both ways to play, batting positions 1, 3, 4, 6, 7 and 11 — and five chases in
 the batting-only build; every innings' card balances against its own total, in
 a Test all four of them, with no dismissal left blank. Every screen draws in
 both builds, and every box on every menu sits inside the frame clear of its

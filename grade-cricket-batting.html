@@ -232,8 +232,14 @@ const REACH_Y = 1.40;                    // and above or below it
 const REACH_STRETCH = { control: 0.88, attack: 1.0, slog: 1.14 };
 
 function batReach(shot, type, contactY, contactZ) {
+  // How far the blade sweeps is a difficulty signal too: on the easy setting
+  // it gets to almost anything, which is what "I did not even reach that" has
+  // to stop being before a first-timer will keep playing. It is your blade,
+  // though — the same rule as the pace and the fielders. Handing the reach to
+  // the opposition as well would make the easy setting the hard one to bowl on.
+  const lv = (M && M.phase === 'bat' && M.level && M.level.reachMul) || 1;
   const cy = (shot.likeH[0] + shot.likeH[1]) / 2;
-  const k = REACH_STRETCH[type] || 1;
+  const k = (REACH_STRETCH[type] || 1) * lv;
   const dz = (contactZ - shot.reachZ) / (REACH_Z * k);
   const dy = (contactY - cy) / (REACH_Y * k);
   return Math.hypot(dz, dy);             // <= 1 is within the swept arc
@@ -489,17 +495,19 @@ const COVERING = [
 const LEVELS = [
   {
     key: 'easy', name: 'EASY', blurb: 'Slower, wider, and the pitch marker stays up.',
-    paceMul: 0.86, myPace: 1.00, wayward: 0.46, markerLead: 0.70,
-    aiSigma: 0.104, aiWindow: 1.06, newBatter: 0.20, batWindow: 1.22, edgeWiden: 0.72,
+    paceMul: 0.80, myPace: 1.00, wayward: 0.46, markerLead: 0.80,
+    aiSigma: 0.104, aiWindow: 1.06, newBatter: 0.24, batWindow: 2.60, edgeWiden: 0.60,
+    reachMul: 1.55, powerMul: 1.34, liftMul: 0.62, chasePar: 2.30,
     dossier: false, fieldSpread: 0.86, boundary: 52,
-    fieldSpeed: 5.2, fieldReact: 0.44,
+    fieldSpeed: 4.4, fieldReact: 0.56,
     field: FIELDS.club, attack: ['medium', 'medium', 'finger', 'fast'],
     colour: '#5fd07a',
   },
   {
     key: 'medium', name: 'MEDIUM', blurb: 'Quicker, straighter, and less warning.',
     paceMul: 0.94, myPace: 1.00, wayward: 0.30, markerLead: 0.48,
-    aiSigma: 0.082, aiWindow: 1.18, newBatter: 0.10, batWindow: 1.12, edgeWiden: 0.86,
+    aiSigma: 0.082, aiWindow: 1.18, newBatter: 0.10, batWindow: 1.40, edgeWiden: 0.84,
+    reachMul: 1.16, powerMul: 1.12, liftMul: 0.86, chasePar: 1.50,
     dossier: false, fieldSpread: 0.94, boundary: 56,
     fieldSpeed: 6.2, fieldReact: 0.33,
     field: FIELDS.club, attack: ['fast', 'medium', 'finger', 'wrist'],
@@ -509,6 +517,7 @@ const LEVELS = [
     key: 'hard', name: 'HARD', blurb: 'No marker. They have worked you out.',
     paceMul: 1.00, myPace: 1.00, wayward: 0.18, markerLead: 0.16,
     aiSigma: 0.062, aiWindow: 1.30, newBatter: 0.02, batWindow: 1.06, edgeWiden: 1.00,
+    reachMul: 1.00, powerMul: 1.00, liftMul: 1.00, chasePar: 1.05,
     dossier: true, fieldSpread: 0.97, boundary: 57,
     fieldSpeed: 6.7, fieldReact: 0.27,
     field: FIELDS.island, attack: ['fast', 'fast', 'wrist', 'finger'],
@@ -2162,7 +2171,12 @@ const M = {
      result and the scorecard read exactly as they do in the full game. */
   setChase() {
     const balls = this.format.overs * 6;
-    const total = Math.max(14, Math.round(balls * this.parRate() * rnd(0.82, 1.18)));
+    // A chase has to be worth chasing. Par for the *bowling side* is not the
+    // number to set here: on the easy setting you score at three times it, so
+    // a par total is over by the fourth over. The target scales with how
+    // freely the setting lets you bat.
+    const total = Math.max(14, Math.round(balls * this.parRate()
+                                          * (this.level.chasePar || 1) * rnd(0.86, 1.14)));
     const wkts = clamp(2 + (Math.random() * 8 | 0), 2, 9);
     fillCard(this.theirCard, total, wkts, this.myAttack);
     this.bowl.runs = total; this.bowl.wickets = wkts; this.bowl.balls = balls;
@@ -2481,9 +2495,12 @@ const Bat = {
     let angle = aimAng + randn() * cone;
     if (quality === 'edge') angle = edgeDeflect(angle);
     let power = CFG.swingSpeed[type] * CFG.qualityMult[quality] * shot.power * approp;
+    power *= (T.powerMul || 1);          // an easy pitch is a fast outfield too
     power *= 1 + M.swagger * 0.10;
     if (this.flourish) power *= CFG.flourishBonus;
-    let lift = shot.lift * CFG.typeLift[type] * CFG.qualityLift[quality];
+    // Loft is what gets you caught, so the easy setting keeps the ball down:
+    // a boundary every other ball is no use if every third one is a skier.
+    let lift = shot.lift * CFG.typeLift[type] * CFG.qualityLift[quality] * (T.liftMul || 1);
     if (quality === 'edge') lift = edgeLift(lift, angle);
 
     this.swingInfo = { type: type, quality: quality, err: dt, approp: approp };
