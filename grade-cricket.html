@@ -196,7 +196,18 @@ const WIN = { middle: 0.052, good: 0.104, edge: 0.176 };
    ball can pass before the umpire calls it. Bowling off the pitch to keep the
    batter quiet now costs a run and the ball, which is exactly what the law is
    for and exactly why it had to exist here. */
-const WIDE_OFF = 1.05, WIDE_LEG = -0.92;
+/* Out of reach, and only then. The lines were set at 1.05 and 0.92 metres,
+   inside what the bat can actually get to — a shot's reach line runs out to
+   0.58 off the stumps and the bat stretches 0.78 past that — so a legitimate
+   ball that a batter could have cut was being called. Worse, a leg break
+   pitching on off and turning away crossed the old line by doing exactly
+   what a leg break is supposed to do: one ball in five was a wide.
+
+   They are now set outside the far edge of the reach envelope, off side and
+   leg, and the call is made where the batter stands rather than a metre
+   behind him, so the last of the drift towards the keeper does not decide
+   it. A ball he plays at is never a wide however far away it was. */
+const WIDE_OFF = 1.48, WIDE_LEG = -1.24;
 const isWide = z => z > WIDE_OFF || z < WIDE_LEG;
 
 const REACH_Z = 0.78;                    // metres either side of the blade's line
@@ -368,16 +379,27 @@ function shadeHex(hex, k) {
    the ball-by-ball game is settled, which is the right order. */
 const FORMATS = [
   {
-    key: 'od', name: 'ONE DAY', overs: 5, whites: false,
+    key: 't5', name: 'T5', overs: 5, innings: 1, whites: false,
     field: 'club', chase: true, aiPatience: 0,
-    blurb: 'Coloured clothing, a ring field, and a total to chase.',
+    blurb: 'Five overs a side. Everything happens at once.',
   },
   {
-    key: 'test', name: 'TEST', overs: 5, whites: true,
+    key: 't10', name: 'T10', overs: 10, innings: 1, whites: false,
+    field: 'club', chase: true, aiPatience: 0.12,
+    blurb: 'Ten overs a side. Room for an innings, but not much.',
+  },
+  {
+    key: 'od', name: 'ONE DAY', overs: 20, innings: 1, whites: false,
+    field: 'club', chase: true, aiPatience: 0.28,
+    blurb: 'Twenty overs, coloured clothing, and a total to chase.',
+  },
+  {
+    key: 'test', name: 'TEST', overs: 10, innings: 2, whites: true,
     field: 'island', chase: false, aiPatience: 0.55,
-    blurb: 'Whites, a red ball and slips. Nobody is in a hurry.',
+    blurb: 'Whites and slips. Ten overs and two innings each.',
   },
 ];
+const formatByKey = k => FORMATS.find(f => f.key === k) || FORMATS[1];
 
 /* How you play: as yourself, or as the whole side. */
 const PLAY_AS = [
@@ -1028,7 +1050,7 @@ function drawFigureSide(x, z, o) {
   const footF = limbFrom(kneeF, o.legF * 0.30, H * 0.24, dir);
   const kneeB = limbFrom(hip, o.legB, H * 0.24, dir);
   const footB = limbFrom(kneeB, o.legB * 0.30, H * 0.24, dir);
-  const legCol = o.pads ? (o.padCol || PAL.white) : o.shirt;
+  const legCol = o.legCol || (o.pads ? (o.padCol || PAL.white) : o.shirt);
   const legW = lw * (o.pads ? 2.2 : 1);
   Art.line(hip, kneeB, legW * 0.92, legCol); Art.line(kneeB, footB, legW * 0.92, legCol);
   Art.line(hip, kneeF, legW, legCol);       Art.line(kneeF, footF, legW, legCol);
@@ -1059,7 +1081,7 @@ function drawFigureFacing(x, z, o) {
   const footL = limbFrom(kneeL, -o.legL * 0.35, H * 0.24);
   const kneeR = limbFrom(hip, o.legR, H * 0.24);
   const footR = limbFrom(kneeR, o.legR * 0.35, H * 0.24);
-  const legCol = o.pads ? (o.padCol || PAL.white) : o.shirt;
+  const legCol = o.legCol || (o.pads ? (o.padCol || PAL.white) : o.shirt);
   const legW = lw * (o.pads ? 2.1 : 1);
   Art.line(hip, kneeL, legW, legCol); Art.line(kneeL, footL, legW, legCol);
   Art.line(hip, kneeR, legW, legCol); Art.line(kneeR, footR, legW, legCol);
@@ -1081,7 +1103,7 @@ function drawFigureFacing(x, z, o) {
 const FIG_DEFAULTS = {
   view: 'side', face: -1, shirt: PAL.maroon, pads: false, bat: false, cap: 'helmet',
   lean: 0, tilt: 0, crouch: 0, height: 1.82, batAng: -40, scale: 1, alpha: 1,
-  trim: null, skin: null, padCol: null, capCol: null,
+  trim: null, skin: null, padCol: null, capCol: null, legCol: null,
   armF: 30, armB: -22, legF: 18, legB: -18,       // side rig
   armL: 22, armR: 22, legL: 16, legR: 16,          // facing rig
 };
@@ -1815,7 +1837,7 @@ const Chase = {
     // Whatever is on your head stays on it between the wickets. The runners
     // were hard-coded to a helmet, so a cap innings put a helmet on halfway
     // through every single.
-    const lid = M.phase === 'bat' ? (M.gear === 'cap' ? 'cap' : 'helmet') : 'helmet';
+    const lid = M.phase === 'bat' && M.striker().you && M.gear === 'cap' ? 'cap' : 'helmet';
     const one = { view: 'side', face: flip ? 1 : -1, shirt: K.shirt, trim: K.trim,
                   padCol: K.pads, capCol: K.cap, skin: K.skin, pads: true,
                   cap: lid, bat: true, batAng: 62, scale: 0.96,
@@ -2017,8 +2039,10 @@ function screenFromAim(ang) {
 /* ===================== MATCH STATE ===================== */
 const M = {
   level: LEVELS[0], mode: 'match', phase: 'bat',
-  gear: 'helmet', style: STYLES[0], format: FORMATS[0], playAs: PLAY_AS[0],
+  gear: 'helmet', style: STYLES[0], format: formatByKey('t10'), playAs: PLAY_AS[0],
   bowlerAs: null, myOrder: 4,
+  inns: 1, log: [],       // which innings of the match, and the finished ones
+  mySlot: 0, myOther: -1, nextIn: 11,    // striker, non-striker, next man in
   swagger: 0,
   dossier: [0, 0, 0, 0, 0, 0],
   bat: null, bowl: null, field: null, attack: null,
@@ -2040,56 +2064,31 @@ const M = {
     this.us = pick(NATIONS.filter(n => n !== this.oppo));
     this.ground = pick(GROUNDS[this.oppo.code]);
     this.light = pick(LIGHTS);
-    this.bat = {
-      runs: 0, balls: 0, fours: 0, sixes: 0, out: false, howOut: '',
-      overs: mode === 'batPractice' ? 99 : 5, teamRuns: 0, extras: 0,
-      before: 0, wktsBefore: 0, dots: 0,
-    };
-    this.bowl = {
-      overs: mode === 'bowlPractice' ? 99 : 5, balls: 0, runs: 0, wickets: 0,
-      maxWickets: 10, variLeft: 2, lastBands: [], target: 0, extras: 0,
-    };
-    this.bat.before = this.batBeforeRuns;
-    this.bat.wktsBefore = this.batBefore;
-    if (this.playAs.key === 'player' && mode === 'match') {
-      // the overs left when you get there
-      this.bat.overs = Math.max(1, 5 - Math.floor((this.myOrder - 1) * 0.34));
-    }
+    this.inns = 1; this.log = [];
     this.field = buildField(level, null);
 
-    // their eleven, and yours. You bat four; the rest of your side is simmed
-    // at the innings break to add up to the total you are defending.
+    // their eleven, and yours. You bat at your number; in MY PLAYER the rest of
+    // your side is simmed at the innings break to add up to the total you are
+    // defending, and in WHOLE TEAM you bat every one of them yourself.
     const used = [];
-    this.theirCard = [];
-    for (let i = 0; i < 11; i++) {
-      const m = castMember(this.oppo, used);
-      this.theirCard.push({ name: m.name, runs: 0, balls: 0, out: false, how: '' });
-    }
-    this.theirOut = 0;
+    this.theirEleven = [];
+    for (let i = 0; i < 11; i++) this.theirEleven.push(castMember(this.oppo, used).name);
     // Their attack is four of the same eleven, taken from the bottom of the
     // order, because the men who bowl at you are the men you bowl at — the
     // first pass drew two separate name lists and the card read as though
     // they had turned up with a second team.
-    this.attack = level.attack.map((k, i) => {
-      const man = this.theirCard[10 - i];
-      return { name: man.name, style: styleByKey(k), balls: 0, runs: 0, wickets: 0 };
-    });
+    this.attack = level.attack.map((k, i) => (
+      { name: this.theirEleven[10 - i], style: styleByKey(k), balls: 0, runs: 0, wickets: 0 }
+    ));
     const mine = [];
-    this.myCard = [];
+    this.myEleven = [];
     for (let i = 0; i < 11; i++) {
       const m = castMember(this.us, mine);
-      this.myCard.push({ name: m.name, runs: 0, balls: 0, out: false, how: 'dnb' });
+      this.myEleven.push(m.name);
     }
-    /* Where your number puts you. Opening is a fresh sheet; coming in at
-       seven is four down with the overs going. In WHOLE TEAM you bat the
-       whole innings, so none of this applies. */
-    this.mySlot = this.myOrder - 1;
-    const solo = this.playAs.key === 'player' && mode === 'match';
-    const gone = solo ? this.myOrder - 1 : 0;
-    this.batBefore = gone;
-    this.batBeforeRuns = solo ? Math.round(gone * rnd(5, 16)) : 0;
-    this.myCard[this.mySlot] = { name: Save.data.player.name || 'YOU', you: true,
-                                 runs: 0, balls: 0, out: false, how: 'not out' };
+    this.myEleven[this.myOrder - 1] = Save.data.player.name || 'YOU';
+    this.startMyInnings();
+    this.startTheirInnings();
 
     // Your side's attack: you, and three team-mates who can bowl. In WHOLE
     // TEAM you choose which of them takes each over; as MY PLAYER you bowl
@@ -2109,11 +2108,98 @@ const M = {
     this.msg = ''; this.msgT = 0;
     Chase.stop(); Take.stop(); Catcher.clear();
   },
+  /* A fresh innings for your side. Called at the top of the match and again
+     for a Test's second innings: same eleven, clean card, clean counters.
+
+     `bat.runs` and `bat.balls` are the innings' — the side's — not one man's;
+     what any individual made is on his own line of the card. That is the
+     difference between MY PLAYER, where you are the only one of them anybody
+     plays, and WHOLE TEAM, where you are all eleven. */
+  startMyInnings() {
+    const solo = this.playAs.key === 'player' && this.mode === 'match';
+    this.bat = {
+      runs: 0, balls: 0, fours: 0, sixes: 0, out: false, howOut: '',
+      overs: this.mode === 'batPractice' ? 99 : this.format.overs,
+      teamRuns: 0, extras: 0, before: 0, wickets: 0, dots: 0, overRuns: 0,
+    };
+    this.myCard = this.myEleven.map((n, i) => ({
+      name: n, you: i === this.myOrder - 1,
+      runs: 0, balls: 0, out: false, how: 'dnb',
+    }));
+    if (solo) {
+      /* Where your number puts you. Opening is a fresh sheet; coming in at
+         seven is four down with the overs going, and fewer of them left. */
+      this.mySlot = this.myOrder - 1;
+      this.bat.wickets = this.myOrder - 1;
+      // How much of the innings is already gone, and what it is worth. Both
+      // are read off the format: six down in a five-over game is a different
+      // situation from six down in twenty, and pricing a wicket at a flat
+      // ten runs made a long format's total silly.
+      const spent = Math.min(this.format.overs - 1,
+                             Math.round((this.myOrder - 1) * 0.09 * this.format.overs));
+      this.bat.before = Math.round(spent * 6 * this.parRate() * rnd(0.75, 1.25));
+      this.bat.overs = Math.max(1, this.format.overs - spent);
+      for (let i = 0; i < this.mySlot; i++) this.myCard[i].how = 'not out';
+      this.myOther = -1;                 // no partner is modelled: it is you
+      this.nextIn = 11;
+    } else {
+      // and you bat every one of them, two at a time, in order
+      this.mySlot = 0; this.myOther = 1; this.nextIn = 2;
+      this.myCard[1].how = 'not out';
+    }
+    this.myCard[this.mySlot].how = 'not out';
+    this.swagger = 0;
+  },
+  /* They cross on an odd run and change ends at the end of the over, which
+     is what makes a card read as a team's innings rather than one man's. */
+  swapEnds() {
+    if (this.myOther < 0) return;
+    const t = this.mySlot; this.mySlot = this.myOther; this.myOther = t;
+  },
+  /* Out, and the next man walks. Returns false when there is nobody left. */
+  nextBatter() {
+    if (this.myOther < 0 || this.nextIn > 10) return false;
+    this.mySlot = this.nextIn++;
+    this.myCard[this.mySlot].how = 'not out';
+    return true;
+  },
+  /* And a fresh one for theirs. */
+  startTheirInnings() {
+    this.bowl = {
+      overs: this.mode === 'bowlPractice' ? 99 : this.format.overs,
+      balls: 0, runs: 0, wickets: 0, maxWickets: 10, variLeft: 2,
+      lastBands: [], target: 0, extras: 0,
+    };
+    this.theirCard = this.theirEleven.map(n => (
+      { name: n, runs: 0, balls: 0, out: false, how: 'dnb' }
+    ));
+    this.theirOut = 0;
+    this.attack.forEach(a => { a.balls = 0; a.runs = 0; a.wickets = 0; });
+    if (this.myAttack) this.myAttack.forEach(a => { a.balls = 0; a.runs = 0; a.wickets = 0; });
+  },
+  /* The man on strike, whoever that is this over. */
+  striker() { return this.myCard[Math.min(this.mySlot, 10)]; },
+  /* What your side is on: the runs off the bat, plus the extras. */
+  myScore() { return this.bat.before + this.bat.runs + this.bat.extras; },
+
   bowlerNow() { return this.attack[Math.floor(this.bat.balls / 6) % this.attack.length]; },
   /* Whoever is on strike for them. Their card is filled in as the innings
      happens rather than invented at the end, so the scorecard is a record of
      what you actually did to them. */
-  theirBatter() { return this.theirCard[Math.min(this.theirOut, 10)]; },
+  theirBatter() {
+    const c = this.theirCard[Math.min(this.theirOut, 10)];
+    // The moment a man is on strike he has batted, so the card stops calling
+    // him a did-not-bat — which is what it called every unbeaten batsman in
+    // an innings that ended on overs rather than on wickets.
+    if (c && c.how === 'dnb') c.how = 'not out';
+    return c;
+  },
+  /* Par, per ball, for the side and the tempo this format asks for. Used
+     wherever an innings has to be filled in rather than played. */
+  parRate() {
+    return (1.05 + LEVELS.indexOf(this.level) * 0.08)
+         * (1 - (this.format.aiPatience || 0) * 0.5);
+  },
   say(text, big) { this.msg = text; this.msgT = now(); this.msgBig = !!big; },
 };
 
@@ -2176,7 +2262,12 @@ const Bat = {
     }
     bandIdx = clamp(bandIdx, 0, 4);
     const band = del.bouncer ? BOUNCER_BAND : BANDS[bandIdx];
-    const lineZ = clamp(randn() * (0.40 + wayward * 0.6) + 0.10, -1.5, 1.7);
+    // Loose should mean hittable, not unplayable. The lateral spread used to
+    // run to two thirds of a metre of standard deviation at the easy end,
+    // which put a steady trickle of deliveries outside anybody's reach; the
+    // difficulty now lives in the length band, which is where a batter feels
+    // it anyway.
+    const lineZ = clamp(randn() * (0.30 + wayward * 0.42) + 0.10, -1.5, 1.7);
     const pace = rnd(S.pace[0], S.pace[1]) * T.paceMul * (del.paceMul || 1) * (1 - pressure * 0.05);
 
     this.d = {
@@ -2243,7 +2334,7 @@ const Bat = {
       }
       // remember what it was doing as it went past the stumps: that, not
       // where it ends up in the keeper's gloves, is what decides bowled
-      if (!Ball.hit && !this.pastStumps && Ball.x >= PITCH_LEN) {
+      if (!Ball.hit && !this.pastStumps && Ball.x >= CONTACT_X) {
         this.pastStumps = { z: Ball.z, y: Ball.y };
       }
       if (!Ball.hit && Ball.x > this.keeperX() - 0.3) {
@@ -2347,6 +2438,7 @@ const Bat = {
       return;
     }
     b.balls++;
+    M.striker().balls++;
 
     if (r.type === 'caught') {
       o.wicket = true;
@@ -2390,21 +2482,22 @@ const Bat = {
     const b = M.bat;
     if (o.wicket) {
       b.out = true; b.howOut = o.how;
-      const mine = M.myCard[M.mySlot];
-      mine.balls = b.balls; mine.out = true; mine.how = o.how;
+      const mine = M.striker();
+      mine.out = true; mine.how = o.how;
+      b.wickets++;
       M.swagger = 0;                     // it drops out the ball you get out
       // A golden duck is out first ball. Any other nought is just a duck,
       // and every wicket at nought was being called golden.
-      const golden = b.runs === 0 && b.balls <= 1;
+      const golden = mine.runs === 0 && mine.balls <= 1;
       if (this.bowler) { this.bowler.balls++; this.bowler.wickets++; }
-      M.say(golden ? 'GOLDEN DUCK' : b.runs === 0 ? 'DUCK' : o.label, true);
+      M.say(golden ? 'GOLDEN DUCK' : mine.runs === 0 ? 'DUCK' : o.label, true);
       Snd.sting(golden ? 'duck' : 'wicket');
       Cam.kick(0.7);
       return;
     }
-    b.runs += o.runs;
-    const me = M.myCard[M.mySlot];
-    me.runs = b.runs; me.balls = b.balls;
+    b.runs += o.runs; b.overRuns += o.runs;
+    M.striker().runs += o.runs;
+    if (o.runs % 2 === 1) M.swapEnds();
     // Swagger builds on dominant strokeplay only — boundaries, and attacking
     // shots played to good balls. Milked singles build nothing.
     let gain = 0;
@@ -2425,12 +2518,25 @@ const Bat = {
 
   after() {
     const b = M.bat;
-    if (b.out || (M.mode !== 'batPractice' && b.balls >= b.overs * 6)) {
-      Match.endInnings();
-    } else {
-      if (M.level.dossier && b.balls % 6 === 0) M.field = buildField(M.level, M.dossier);
-      this.nextBall();
+    const whole = M.playAs.key === 'team' && M.mode === 'match';
+    if (b.out) {
+      /* Playing the whole side means the next man walks out, and the innings
+         runs to ten down or the overs, the way an innings does. Playing your
+         own player, your dismissal is the end of it — the rest of the card is
+         filled in at the break. */
+      if (whole && b.wickets < 10 && b.balls < b.overs * 6 && M.nextBatter()) {
+        b.out = false;
+      } else { Match.endInnings(); return; }
     }
+    if (M.mode !== 'batPractice' && b.balls >= b.overs * 6) { Match.endInnings(); return; }
+    if (M.level.dossier && b.balls % 6 === 0) M.field = buildField(M.level, M.dossier);
+    // The end of an over is a stop, not a seam in the middle of a sentence:
+    // the ends change, the bowler changes, and you get to look at the score.
+    if (M.mode === 'match' && b.balls > 0 && b.balls % 6 === 0) {
+      M.swapEnds();                      // the ends change with the over
+      Match.screen = 'overEnd'; Match.overT = 0; return;
+    }
+    this.nextBall();
   },
 };
 /* ===================== BOWLING =====================
@@ -2447,7 +2553,7 @@ const Bat = {
 const Bowl = {
   phase: 'setup', t: 0,
   target: { x: 16.4, z: 0.30 },
-  vari: false, sweep: 0, sweepDir: 1, tapErr: 1, tapped: false,
+  vari: false, sweep: 0, sweepDir: 1, tapErr: 1, tapped: false, runFrom: 1,
   d: null, pred: null, ai: null, outcome: null, ghost: null,
   flinch: 0, surprise: 0, pace: 20, releaseT: 0, aiQuality: 'good', aiSwingT: -9,
   loose: false, band: BANDS[2],
@@ -2544,7 +2650,7 @@ const Bowl = {
         Snd.travelTo(200 + Ball.distFromCentre() * 9);
         Cam.chase(Ball.x, Ball.y, Ball.z);
       }
-      if (!Ball.hit && !this.pastStumps && Ball.x >= PITCH_LEN) {
+      if (!Ball.hit && !this.pastStumps && Ball.x >= CONTACT_X) {
         this.pastStumps = { z: Ball.z, y: Ball.y };
       }
       if (!Ball.hit && Ball.x > Bat.keeperX() - 0.3) {
@@ -2577,6 +2683,9 @@ const Bowl = {
   release() {
     const S = M.style, del = this.delivery();
     const err = this.tapErr;
+    // how far in he was when the ball left his hand, so the picture can carry
+    // on from there rather than cutting to a man standing at the crease
+    this.runFrom = clamp(this.t / RUNUP_T, 0, 1);
     // Accuracy is the tap, not a die roll: the further off the beat, the
     // further the ball lands from where you put the marker.
     const spread = (0.24 + err * err * 2.2) * S.scatter;
@@ -2783,15 +2892,15 @@ const Bowl = {
     const done = (M.mode !== 'bowlPractice')
       && (b.balls >= b.overs * 6 || b.wickets >= b.maxWickets
           || (b.target > 0 && b.runs >= b.target));
-    if (done) { Match.finish(); return; }
+    if (done) { Match.endTheirInnings(); return; }
     // an over is up: who takes the next one is a decision, not a rotation
     if (b.balls > 0 && b.balls % 6 === 0 && M.mode === 'match'
         && M.playAs.key === 'team') { Match.screen = 'overs'; return; }
     if (b.balls > 0 && b.balls % 6 === 0 && M.mode === 'match'
         && M.playAs.key === 'player') {
-      // your spell is two of the five; the rest is your team-mates' and is simmed
-      const oversBowled = b.balls / 6;
-      if (oversBowled >= 2) { Match.simRestOfSpell(); return; }
+      // your spell is a quarter of the innings, capped where a real one is
+      const spell = clamp(Math.round(b.overs * 0.25), 2, 4);
+      if (b.balls / 6 >= spell) { Match.simRestOfSpell(); return; }
     }
     this.nextBall();
   },
@@ -2802,7 +2911,8 @@ const Bowl = {
    the rest is simmed and you are bowling inside ten seconds. */
 const Match = {
   screen: 'menu', level: LEVELS[0],
-  simTarget: 0, simShown: 0, breakT: 0, introT: 0, note: '', won: false, margin: '', boardPlace: -1,
+  simTarget: 0, simShown: 0, breakT: 0, introT: 0, overT: 0, runOut: null, cardInns: 0,
+  note: '', won: false, margin: '', boardPlace: -1,
 
   toGear(level, mode) {
     this.level = level;
@@ -2824,47 +2934,111 @@ const Match = {
   endInnings() {
     Chase.stop();
     if (M.mode === 'batPractice') { this.finish(); return; }
-    const rate = 1.05 + LEVELS.indexOf(M.level) * 0.08;
-    const left = Math.max(0, M.bat.overs * 6 - M.bat.balls);
-    const others = Math.round(left * rate * rnd(0.6, 1.5)) + Math.round(rnd(6, 26));
-    M.bat.teamRuns = M.bat.runs + M.bat.before + M.bat.extras + others;
-    // share the rest of the total out down the order, so the card adds up
-    let pot = others + M.bat.before;
-    const order = [];
-    for (let i = 0; i < 11; i++) if (i !== M.mySlot) order.push(i);
-    order.forEach((i, n) => {
-      if (pot <= 0) return;
-      const take = n === order.length - 1 ? pot : Math.round(pot * rnd(0.15, 0.45));
-      const c = M.myCard[i];
-      c.runs = Math.min(pot, take);
-      c.balls = Math.max(1, Math.round(c.runs * rnd(0.8, 2.0)));
-      c.out = i < M.mySlot || n < 7;   // everyone above you is already out
-      c.how = c.out ? pick(HOW_OUT)(M.attack) : 'not out';
-      pot -= c.runs;
-    });
-    this.simTarget = M.bat.teamRuns; this.simShown = M.bat.runs;
+    const whole = M.playAs.key === 'team';
+    if (whole) {
+      // Nobody else bats: you batted all of them. The total is what is on the
+      // card, and the men who never got in are down as did not bat.
+      M.bat.teamRuns = M.bat.runs + M.bat.extras;
+    } else {
+      const rate = M.parRate();
+      const left = Math.max(0, M.bat.overs * 6 - M.bat.balls);
+      const others = Math.round(left * rate * rnd(0.7, 1.3));
+      M.bat.teamRuns = M.bat.runs + M.bat.before + M.bat.extras + others;
+      // share the rest of the total out down the order, so the card adds up
+      let pot = others + M.bat.before;
+      const order = [];
+      for (let i = 0; i < 11; i++) if (i !== M.mySlot) order.push(i);
+      order.forEach((i, n) => {
+        if (pot <= 0) return;
+        const take = n === order.length - 1 ? pot : Math.round(pot * rnd(0.15, 0.45));
+        const c = M.myCard[i];
+        c.runs = Math.min(pot, take);
+        c.balls = Math.max(1, Math.round(c.runs * rnd(0.8, 2.0)));
+        c.out = i < M.mySlot || n < 7;   // everyone above you is already out
+        c.how = c.out ? pick(HOW_OUT)(M.attack) : 'not out';
+        pot -= c.runs;
+      });
+    }
+    M.log.push({ side: 'us', inns: M.inns, name: M.us.name,
+                 card: M.myCard.map(c => Object.assign({}, c)),
+                 runs: M.bat.teamRuns, wickets: Math.min(10, M.bat.wickets),
+                 // your own share of it is not the length of it
+                 balls: whole ? M.bat.balls : M.format.overs * 6,
+                 extras: M.bat.extras });
+    this.simTarget = M.bat.teamRuns; this.simShown = M.myScore() - M.bat.extras;
     this.screen = 'break'; this.breakT = 0;
     Snd.mode = 'bowl'; Snd.intensity = 0;
   },
+  /* What they have to get. In a one-innings game it is your total; in a Test
+     it is the lead you have built, and only in the last innings of the four
+     is there anything to chase at all. */
+  theirTarget() {
+    const mine = M.log.filter(e => e.side === 'us').reduce((n, e) => n + e.runs, 0);
+    const theirs = M.log.filter(e => e.side === 'them').reduce((n, e) => n + e.runs, 0);
+    if (M.format.innings === 2 && M.inns === 1) return 0;   // no chase yet
+    return mine - theirs + 1;
+  },
   startBowling() {
     M.phase = 'bowl';
-    M.bowl.target = M.bat.teamRuns + 1;
+    M.startTheirInnings();
+    M.bowl.target = this.theirTarget();
+    M.bowlerAs = M.myAttack[0];
     M.field = buildField(M.level, null);
+    Cam.home(true);
+    // Bowling the whole side means the first over is a choice too, not just
+    // every one after it.
+    if (M.playAs.key === 'team' && M.mode === 'match') { this.screen = 'overs'; return; }
     this.screen = 'match';
     Bowl.nextBall();
-    Cam.home(true);
+  },
+  /* Their innings is over. In a Test that may only be half the match. */
+  endTheirInnings() {
+    Chase.stop();
+    M.log.push({ side: 'them', inns: M.inns, name: M.oppo.name,
+                 card: M.theirCard.map(c => Object.assign({}, c)),
+                 runs: M.bowl.runs, wickets: M.bowl.wickets,
+                 balls: M.bowl.balls, extras: M.bowl.extras });
+    if (M.format.innings === 2 && M.inns === 1) {
+      M.inns = 2;
+      M.phase = 'bat';
+      M.startMyInnings();
+      M.field = buildField(M.level, null);
+      this.screen = 'break'; this.breakT = 0;
+      this.simTarget = -1;               // the between-innings card, not a sim
+      Snd.mode = 'bat'; Snd.intensity = 0;
+      return;
+    }
+    this.finish();
+  },
+  /* Aggregates, for a result that has to add up over four innings. Every
+     completed innings is in the log by the time anything asks. */
+  ourRuns() { return M.log.filter(e => e.side === 'us').reduce((n, e) => n + e.runs, 0); },
+  theirRuns() { return M.log.filter(e => e.side === 'them').reduce((n, e) => n + e.runs, 0); },
+  /* Your own line, out of however many innings you batted — which is what
+     the board and the selector are actually judging. */
+  myInnings() {
+    let runs = 0, balls = 0;
+    M.log.filter(e => e.side === 'us').forEach(e => {
+      const mine = e.card.find(c => c.you);
+      if (mine && mine.how !== 'dnb') { runs += mine.runs; balls += mine.balls; }
+    });
+    return { runs: runs, balls: balls };
   },
   finish() {
     Chase.stop();
     this.screen = 'result';
     Portal.playStop();
-    const b = M.bat, w = M.bowl;
+    const ours = this.ourRuns(), theirs = this.theirRuns();
+    const w = M.bowl;
     if (M.mode === 'match') {
-      this.won = w.runs <= b.teamRuns;
-      this.margin = this.won ? (b.teamRuns - w.runs) + ' RUNS' : (w.maxWickets - w.wickets) + ' WICKETS';
+      this.won = theirs <= ours;
+      this.margin = theirs === ours ? ''
+                  : this.won ? (ours - theirs) + ' RUNS'
+                  : (w.maxWickets - w.wickets) + ' WICKETS';
     }
     this.note = selectorNote();
     this.boardPlace = -1;
+    const b = this.myInnings();
     if (b.balls > 0) {
       Save.data.board.forEach(e => { e.fresh = false; });
       const d = new Date();
@@ -2897,17 +3071,25 @@ function youAs() { return M.bowlerAs || { name: Save.data.player.name || 'YOU' }
 
 /* The overs you do not bowl yourself. Your team-mates get through them at
    their own rate, and their figures go on the card like anybody's. */
+/* The overs you do not bowl yourself, played out rather than resolved.
+   Jumping from the last ball of your spell to the result screen threw away
+   the only part of the match with any suspense left in it, so the rest of
+   the innings is simmed into a list of overs and then revealed one at a
+   time, with the score moving and the chase closing. */
 Match.simRestOfSpell = function () {
   const b = M.bowl;
+  const overs = [];
   while (b.balls < b.overs * 6 && b.wickets < b.maxWickets
          && !(b.target > 0 && b.runs >= b.target)) {
     const man = M.myAttack[1 + ((b.balls / 6) | 0) % (M.myAttack.length - 1)];
+    const line = { who: man.name, runs: 0, wickets: 0, gone: [] };
     for (let i = 0; i < 6 && b.balls < b.overs * 6; i++) {
       const r = Math.random();
       const runs = r < 0.34 ? 0 : r < 0.62 ? 1 : r < 0.76 ? 2 : r < 0.92 ? 4 : 6;
       const wicket = Math.random() < 0.045;
       b.balls++; b.runs += runs;
       man.balls++; man.runs += runs;
+      line.runs += runs;
       const bat = M.theirBatter();
       if (bat) {
         bat.balls++; bat.runs += runs;
@@ -2915,21 +3097,28 @@ Match.simRestOfSpell = function () {
           bat.out = true;
           bat.how = 'b ' + man.name;
           M.theirOut++; b.wickets++; man.wickets++;
+          line.wickets++; line.gone.push(bat.name);
         }
       }
       if (b.wickets >= b.maxWickets) break;
+      if (b.target > 0 && b.runs >= b.target) break;
     }
+    line.at = b.runs + '-' + b.wickets;
+    line.over = Math.ceil(b.balls / 6);
+    overs.push(line);
   }
-  Match.finish();
+  Match.runOut = { overs: overs, shown: 0, t: 0 };
+  Match.screen = 'runout';
 };
 
 function selectorNote() {
-  const b = M.bat, w = M.bowl;
+  const b = Match.myInnings(), w = M.bowl;
+  const wkts = M.log.filter(e => e.side === 'them').length ? M.myAttack[0].wickets : w.wickets;
   if (b.runs === 0 && b.balls <= 1) return '"Everyone gets one of those. Not everyone gets two."';
-  if (b.sixes >= 2) return '"He didn\'t look at the bowler once. Not once."';
-  if (w.wickets >= 3) return '"Bowled like he meant it. Keep him on."';
+  if (M.bat.sixes >= 2) return '"He didn\'t look at the bowler once. Not once."';
+  if (wkts >= 3) return '"Bowled like he meant it. Keep him on."';
   if (b.runs >= 40) return '"Made it look like a different game."';
-  if (b.runs < 8 && w.wickets === 0) return '"Quiet day. There\'s a fixture next week."';
+  if (b.runs < 8 && wkts === 0) return '"Quiet day. There\'s a fixture next week."';
   return '"Useful. We\'ll see him again."';
 }
 /* ===================== SCENE ===================== */
@@ -3057,6 +3246,10 @@ function drawGhost(g) {
    last stretch the arm goes over the top — with no faces and no fingers
    that arm and the seam on the ball are the whole tell. */
 const BOWLER_Z = 0.45;
+/* How long the walk back and in takes when you are the one bowling. It used
+   to be 1.6s, which was longer than anybody waits before tapping the beat,
+   so the tap almost always caught him a long way back. */
+const RUNUP_T = 1.15;
 const markX = awayFromCamera => (awayFromCamera ? -7.0 : -8.0);
 const runupX = (p, awayFromCamera) => lerp(markX(awayFromCamera), RELEASE_X, Math.pow(p, 0.85));
 
@@ -3077,6 +3270,48 @@ function drawBowlerRunup(p, shirt, style, awayFromCamera) {
   });
   if (del < 0.9) drawBallInHand(f, 9);    // seam showing, the only tell there is
   return f;
+}
+
+/* The follow-through. A bowler does not stop dead at the crease — he runs on
+   down the pitch, veers off it and lets the arm come across, and cutting
+   from the delivery stride to a standing figure was the most obviously wrong
+   second in the game. Timing the beat early made it worse: the run-up was
+   abandoned wherever the tap caught him and the next frame painted him at
+   the crease. He now covers the last of the ground in a stride and then
+   follows through, and the reaction pose picks him up where it leaves him. */
+const FOLLOW_X = 4.6, FOLLOW_Z = 1.10, FOLLOW_T = 1.05, CATCHUP_T = 0.26;
+const followEase = u => 1 - Math.pow(1 - clamp(u, 0, 1), 2.1);
+const followX = u => lerp(RELEASE_X, FOLLOW_X, followEase(u));
+const followZ = u => lerp(BOWLER_Z, FOLLOW_Z, followEase(u));
+
+function drawBowlerFollow(u, shirt, style, awayFromCamera) {
+  u = clamp(u, 0, 1);
+  const x = followX(u), z = followZ(u);
+  const cyc = Math.sin(u * 13 + 1.1) * 26 * (1 - u * 0.8);
+  const arm = lerp(-300, -408, followEase(u));   // over the top and across
+  Art.shadow(x, z, 0.42, 0.2);
+  return drawFigure(x, z, {
+    view: 'front', shirt: shirt, cap: 'cap',
+    legL: 15 + cyc, legR: 15 - cyc,
+    armL: arm, armR: 26 - cyc * 0.6,
+    lean: (awayFromCamera ? -1 : 1) * (2.2 - u * 1.7),
+    tilt: -2 + u * 1.5,
+  });
+}
+
+/* Wherever the tap caught him, through the crease, and out the other side.
+   `from` is how far into the run-up he had got when the ball left his hand,
+   `t` how long ago that was. */
+function drawBowlerDelivery(from, t, shirt, style, awayFromCamera, place) {
+  const rest = (1 - from) * CATCHUP_T;
+  if (t < rest) {
+    const q = clamp(from + (t / Math.max(0.001, rest)) * (1 - from), 0, 1);
+    place(runupX(q, awayFromCamera), BOWLER_Z,
+          () => drawBowlerRunup(q, shirt, style, awayFromCamera));
+    return;
+  }
+  const u = clamp((t - rest) / FOLLOW_T, 0, 1);
+  place(followX(u), followZ(u), () => drawBowlerFollow(u, shirt, style, awayFromCamera));
 }
 
 /* The ball turning over in his hand. */
@@ -3116,17 +3351,17 @@ function drawBowlerWaiting(t, shirt) {
 
 /* He reacts, visibly, every ball. Beating an opponent is more fun than
    beating a difficulty curve. */
-const REACTION_X = 2.6;
+const REACTION_X = FOLLOW_X, REACTION_Z = FOLLOW_Z;
 function drawBowlerReaction(mood, shirt) {
-  const x = REACTION_X;
-  Art.shadow(x, 0.5, 0.42, 0.2);
+  const x = REACTION_X, z = REACTION_Z;
+  Art.shadow(x, z, 0.42, 0.2);
   const base = { view: 'front', shirt: shirt, cap: 'cap' };
   if (mood > 0.35) {                     // hands on head
-    drawFigure(x, 0.5, Object.assign({}, base, { armL: -168, armR: 168, legL: 10, legR: 10 }));
+    drawFigure(x, z, Object.assign({}, base, { armL: -168, armR: 168, legL: 10, legR: 10 }));
   } else if (mood < -0.3) {              // a stare down the pitch
-    drawFigure(x, 0.5, Object.assign({}, base, { armL: -8, armR: 8, legL: 22, legR: 22, lean: 1.6 }));
+    drawFigure(x, z, Object.assign({}, base, { armL: -8, armR: 8, legL: 22, legR: 22, lean: 1.6 }));
   } else {
-    drawFigure(x, 0.5, Object.assign({}, base, { armL: 16, armR: 16, legL: 13, legR: 13 }));
+    drawFigure(x, z, Object.assign({}, base, { armL: 16, armR: 16, legL: 13, legR: 13 }));
   }
 }
 
@@ -3261,8 +3496,11 @@ function drawBatBlur(anchors, o) {
    his cut still goes to the off. */
 function drawStriker() {
   const K = myKit();
+  // The cap is your player's choice, so it is on your player's head and
+  // nobody else's — which only shows up once you are batting all eleven.
+  const lid = M.striker().you && M.gear === 'cap' ? 'cap' : 'helmet';
   const o = strikerPose(Bat.zone, Bat.swung ? Bat.swingT : -1, Bat.swingInfo,
-                        K.shirt, M.gear === 'cap' ? 'cap' : 'helmet', 1);
+                        K.shirt, lid, 1);
   o.trim = K.trim; o.padCol = K.pads; o.capCol = K.cap; o.skin = K.skin;
   const x = STRIKER_X - o.stride;        // down the pitch is decreasing x
   Art.shadow(x, STRIKER_Z, 0.44, 0.26);
@@ -3274,16 +3512,20 @@ function drawStriker() {
    the same six shots off the same table — you are watching him middle them
    or not. */
 function drawFacingBatter() {
+  const K = theirKit();
   const fl = Bowl.flinch > 0;
   Art.shadow(STRIKER_X, STRIKER_Z, 0.44, 0.26);
   if (fl) {
+    // Ducking is a pose, not a substitution. This branch used to draw him in
+    // a flat house colour with no trim, pads or skin of his own, so every
+    // ball he left or ducked changed his kit for the length of the animation.
     drawFigure(STRIKER_X, STRIKER_Z, {
-      view: 'side', face: -1, shirt: PAL.them, pads: true, bat: true, cap: 'helmet',
+      view: 'side', face: -1, shirt: K.shirt, trim: K.trim, padCol: K.pads,
+      capCol: K.cap, skin: K.skin, pads: true, bat: true, cap: 'helmet',
       legF: 8, legB: -34, armF: 150, armB: 140, lean: -2.4, crouch: 1.6, batAng: -150,
     });
     return;
   }
-  const K = theirKit();
   const played = Bowl.ai && Bowl.ai.played && Bowl.aiSwingT > 0;
   const o = strikerPose(played ? Bowl.ai.zone : 2, played ? Bowl.aiSwingT : -1,
                         played ? { quality: Bowl.aiQuality } : null,
@@ -3300,13 +3542,23 @@ function drawFacingBatter() {
    They now stand where they actually stand: the umpire a step off to the
    leg side of the bowler's stumps, and the non-striker backing up on the
    other side from the arm. */
-const UMPIRE_X = -2.4, UMPIRE_Z = -1.05;
-const NONSTRIKER_Z = -1.55;
+/* He stands at the wicket, not two and a half metres back from it and out
+   on the square: a shoulder's width to the leg side of the bowler's stumps
+   and level with them, which is where an umpire has always stood and is far
+   enough off the arm at z = +0.45 for the delivery to miss him. */
+const UMPIRE_X = -0.85, UMPIRE_Z = -0.80;
+const NONSTRIKER_Z = -1.70;
 
+/* And he is dressed like one: the white coat and dark trousers of an
+   eighties outside broadcast, so he reads as an official rather than as a
+   twelfth fielder in the wrong shirt. */
 function drawUmpire() {
+  const idle = Math.sin(now() * 0.9) * 1.6;
   Art.shadow(UMPIRE_X, UMPIRE_Z, 0.4, 0.18);
   drawFigure(UMPIRE_X, UMPIRE_Z, {
-    view: 'front', shirt: '#e6e2d6', cap: 'cap', legL: 11, legR: 11, armL: 10, armR: 10, scale: 0.98,
+    view: 'front', shirt: '#f2efe2', trim: '#d8d2bc', legCol: '#2f333a',
+    cap: 'cap', capCol: '#f2efe2', skin: SKINS[1],
+    legL: 9, legR: 9, armL: 8 + idle, armR: 8 - idle, scale: 1.02,
   });
 }
 
@@ -3446,9 +3698,9 @@ function drawScene() {
       const q = clamp(Bat.t / Bat.runup, 0, 1);
       atDepth(runupX(q, false), BOWLER_Z, () => drawBowlerRunup(q, theirShirt, style, false));
     } else if (Bat.phase === 'flight') {
-      atDepth(RELEASE_X, BOWLER_Z, () => drawBowlerRunup(1, theirShirt, style, false));
+      drawBowlerDelivery(1, Bat.t, theirShirt, style, false, atDepth);
     } else {
-      atDepth(REACTION_X, 0.5, () => drawBowlerReaction(M.bowlerMood, theirShirt));
+      atDepth(REACTION_X, REACTION_Z, () => drawBowlerReaction(M.bowlerMood, theirShirt));
     }
     if (Chase.on) actors.push({ d: 12, fn: () => Chase.draw(ourShirt) });
     else {
@@ -3471,10 +3723,10 @@ function drawScene() {
     if (bowlerFielding) {
       /* he is in the actor list already */
     } else if (Bowl.phase === 'runup') {
-      const q = clamp(Bowl.t / 1.6, 0, 1);
+      const q = clamp(Bowl.t / RUNUP_T, 0, 1);
       atDepth(runupX(q, true), BOWLER_Z, () => drawBowlerRunup(q, fielding.shirt, M.style, true));
     } else if (Bowl.phase === 'flight' || Bowl.phase === 'result') {
-      atDepth(RELEASE_X, BOWLER_Z, () => drawBowlerRunup(1, fielding.shirt, M.style, true));
+      drawBowlerDelivery(Bowl.runFrom, Bowl.t, fielding.shirt, M.style, true, atDepth);
     } else {
       // setting your field: he is back at his mark, not standing on a length
       const t = Bowl.t;
@@ -3564,11 +3816,12 @@ function drawHUD() {
   ctx.save();
   if (M.phase === 'bat') {
     const ov = Math.floor(b.balls / 6) + '.' + (b.balls % 6);
+    const st = M.striker();
     drawScorebar([
       { w: 26, bg: PAL.gold, t: '', fg: PAL.ink },
-      { w: 150, bg: '#1c3f6e', t: M.gear === 'cap' ? 'CAP' : 'HELMET', fg: PAL.white, size: 22, align: 'left' },
-      { w: 190, bg: '#12294a',
-        t: (b.before + b.runs + b.extras) + '-' + b.wktsBefore + '   ' + b.runs + '(' + b.balls + ')',
+      { w: 190, bg: '#1c3f6e', t: st.name, fg: PAL.white, size: 20, align: 'left' },
+      { w: 200, bg: '#12294a',
+        t: M.myScore() + '-' + Math.min(10, b.wickets) + '   ' + st.runs + '(' + st.balls + ')',
         fg: PAL.gold, size: 22 },
       { w: 130, bg: '#1c3f6e', t: ov + (M.mode === 'batPractice' ? '' : '/' + b.overs) + ' OV', fg: PAL.white, size: 22 },
       { w: 120, bg: '#12294a', t: b.fours + 'x4  ' + b.sixes + 'x6', fg: PAL.white, size: 20 },
@@ -3748,27 +4001,40 @@ function drawMenu() {
   Art.text('CRICKET', VW / 2, 202, 84, PAL.white);
   Art.text('ONE BALL AT A TIME', VW / 2, 234, 18, 'rgba(255,255,255,0.75)');
 
-  uiBtn(VW / 2 - 330, 266, 300, 84, 'PLAY', '5 overs each · bat then bowl');
-  uiBtn(VW / 2 + 30, 266, 300, 84, 'BATTING', 'endless · learn the fan');
-  uiBtn(VW / 2 - 330, 362, 300, 62, 'BOWLING', 'endless spell');
-  uiBtn(VW / 2 + 30, 362, 300, 62, 'MY PLAYER', Save.data.player.name);
-  uiBtn(VW / 2 - 150, 436, 300, 62, 'LEADERBOARD',
+  const fmt = M.format.overs + ' overs' + (M.format.innings === 2 ? ' · two innings' : '');
+  uiBtn(VW / 2 - 330, 262, 300, 78, 'PLAY', fmt + ' · bat then bowl');
+  uiBtn(VW / 2 + 30, 262, 300, 78, 'BATTING', 'endless · learn the fan');
+  uiBtn(VW / 2 - 330, 350, 300, 58, 'BOWLING', 'endless spell');
+  uiBtn(VW / 2 + 30, 350, 300, 58, 'MY PLAYER', Save.data.player.name);
+  uiBtn(VW / 2 - 150, 418, 300, 58, 'LEADERBOARD',
         Save.best() > 0 ? 'best ' + Save.best() : 'nothing on it yet');
 
-  Art.text('DIFFICULTY', VW / 2 - 360, 528, 16, 'rgba(255,255,255,0.7)');
-  LEVELS.forEach((L, i) => {
-    uiBtn(VW / 2 - 470 + i * 152, 538, 144, 48, L.name, null, Match.level === L);
+  /* Three labelled rows and one strip of prose, all inside their own boxes.
+     The blurbs used to be loose text centred over the middle of the screen,
+     which ran straight through the buttons beside them the moment a line got
+     long — and a fourth format made that a certainty rather than a risk. */
+  const L0 = 96, R0 = 662, ROWW = 512;
+  const label = (t, x) => Art.text(t, x + ROWW / 2, 512, 16, 'rgba(255,255,255,0.7)');
+  label('DIFFICULTY', L0);
+  LEVELS.forEach((Lv, i) => {
+    uiBtn(L0 + i * (ROWW + 8) / 3, 522, (ROWW - 16) / 3, 48, Lv.name, null, Match.level === Lv);
   });
-  Art.text('FORMAT', VW / 2 + 60, 528, 16, 'rgba(255,255,255,0.7)');
+  label('FORMAT', R0);
   FORMATS.forEach((F, i) => {
-    uiBtn(VW / 2 + 20 + i * 152, 538, 144, 48, F.name, null, M.format === F, 'FMT' + F.key);
+    uiBtn(R0 + i * (ROWW + 8) / 4, 522, (ROWW - 24) / 4, 48, F.name, null,
+          M.format === F, 'FMT' + F.key);
   });
-  Art.text('PLAY AS', VW / 2 - 360, 606, 16, 'rgba(255,255,255,0.7)');
+  Art.text('PLAY AS', L0 + ROWW / 2, 584, 16, 'rgba(255,255,255,0.7)');
   PLAY_AS.forEach((A, i) => {
-    uiBtn(VW / 2 - 470 + i * 232, 616, 224, 48, A.name, null, M.playAs === A, 'AS' + A.key);
+    uiBtn(L0 + i * (ROWW + 8) / 2, 594, (ROWW - 8) / 2, 48, A.name, null,
+          M.playAs === A, 'AS' + A.key);
   });
-  Art.text(M.playAs.blurb, VW / 2 + 130, 646, 17, PAL.gold, 'center', '700');
-  Art.text(M.format.blurb, VW / 2 + 130, 592, 16, 'rgba(255,255,255,0.7)', 'center', '700');
+  const strip = M.format.blurb + '   ·   ' + M.playAs.blurb;
+  ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(R0, 594, ROWW, 48);
+  ctx.strokeStyle = 'rgba(255,255,255,0.45)'; ctx.lineWidth = 2;
+  ctx.strokeRect(R0, 594, ROWW, 48);
+  Art.text(strip, R0 + ROWW / 2, 624, fitText(strip, ROWW - 28, 16, '700'),
+           'rgba(255,255,255,0.82)', 'center', '700');
 
   const id = uiTake();
   if (id === 'PLAY') Match.toGear(Match.level, 'match');
@@ -3927,23 +4193,118 @@ function drawGear() {
   else if (id) { const st = STYLES.find(v => v.name === id); if (st) M.style = st; }
 }
 
-/* The rest of the innings compresses — never a wall of numbers. */
+/* The rest of the innings compresses — never a wall of numbers. The same
+   screen serves the change of innings in a Test, where nothing is simmed
+   and there is no total to defend yet, so it says what actually happened. */
 function drawBreak(dt) {
   Match.breakT += dt;
-  Match.simShown = Math.min(Match.simTarget,
-    Match.simShown + Math.max(1, (Match.simTarget - M.bat.runs) * dt * 0.9));
+  const last = M.log[M.log.length - 1] || { runs: 0, wickets: 0, card: [] };
+  const toBat = Match.simTarget < 0;              // your second innings is next
+  if (!toBat) {
+    Match.simShown = Math.min(Match.simTarget,
+      Match.simShown + Math.max(1, (Match.simTarget - Match.simShown) * dt * 1.6));
+  }
   ctx.fillStyle = PAL.ink; ctx.fillRect(0, 0, VW, VH);
-  Art.text('YOUR INNINGS', VW / 2, 130, 28, 'rgba(255,255,255,0.7)');
-  const b = M.bat;
-  Art.text(b.out ? b.runs + ' (' + b.balls + ')  ' + b.howOut : b.runs + ' (' + b.balls + ') NOT OUT',
-    VW / 2, 206, 64, PAL.gold);
-  Art.text(b.fours + ' FOURS   ·   ' + b.sixes + ' SIXES', VW / 2, 246, 21, 'rgba(255,255,255,0.75)');
-  Art.text(M.us.name + ' ALL OUT', VW / 2, 336, 24, 'rgba(255,255,255,0.7)');
-  Art.text(String(Math.round(Match.simShown)), VW / 2, 406, 60, PAL.white);
-  Art.text('YOU OPEN THE BOWLING — ' + M.style.name, VW / 2, 462, 21, PAL.gold);
-  if (Match.breakT > 2.0) {
-    uiBtn(VW / 2 - 190, 506, 380, 74, 'TAKE THE BALL', 'defend ' + (Match.simTarget + 1));
+
+  if (toBat) {
+    Art.text(M.oppo.name + '  ' + last.runs + '-' + last.wickets, VW / 2, 150, 46, PAL.white);
+    const lead = Match.ourRuns() - Match.theirRuns();
+    Art.text(lead >= 0 ? M.us.name + ' LEAD BY ' + lead
+                       : M.us.name + ' TRAIL BY ' + (-lead),
+             VW / 2, 214, 30, PAL.gold);
+    Art.text('SECOND INNINGS', VW / 2, 300, 26, 'rgba(255,255,255,0.7)');
+    Art.text('YOU BAT AGAIN', VW / 2, 366, 54, PAL.white);
+    if (Match.breakT > 1.2) {
+      uiBtn(VW / 2 - 190, 470, 380, 74, 'TAKE GUARD', M.format.overs + ' overs');
+      if (uiTake() === 'TAKE GUARD') {
+        Match.screen = 'match'; Snd.mode = 'bat';
+        Bat.lastBackliftZone = -1; Bat.nextBall(); Cam.home(true);
+      }
+    }
+    return;
+  }
+
+  const mine = last.card.find(c => c.you) || { runs: 0, balls: 0, how: 'dnb' };
+  const whole = M.playAs.key === 'team';
+  Art.text(whole ? M.us.name + ' — ' + (M.inns === 2 ? 'SECOND INNINGS' : 'FIRST INNINGS')
+                 : 'YOUR INNINGS',
+           VW / 2, 128, 28, 'rgba(255,255,255,0.7)');
+  Art.text(mine.how === 'dnb' ? 'DID NOT BAT'
+           : mine.runs + ' (' + mine.balls + ')  ' + (mine.out ? mine.how : 'not out'),
+           VW / 2, 200, 54, PAL.gold);
+  Art.text(M.bat.fours + ' FOURS   ·   ' + M.bat.sixes + ' SIXES',
+           VW / 2, 240, 21, 'rgba(255,255,255,0.75)');
+  Art.text(M.us.name + '  ' + (last.wickets >= 10 ? 'ALL OUT' : last.wickets + ' DOWN'),
+           VW / 2, 322, 24, 'rgba(255,255,255,0.7)');
+  Art.text(String(Math.round(Match.simShown)), VW / 2, 392, 60, PAL.white);
+  const tgt = Match.theirTarget();
+  Art.text(M.playAs.key === 'team' ? 'YOU HAVE THE BALL — ALL ' + M.format.overs + ' OVERS'
+                                  : 'YOU OPEN THE BOWLING — ' + M.style.name,
+           VW / 2, 448, 21, PAL.gold);
+  if (Match.breakT > 1.6) {
+    uiBtn(VW / 2 - 190, 492, 380, 74, 'TAKE THE BALL',
+          tgt > 0 ? 'defend ' + tgt : 'bowl them out');
     if (uiTake() === 'TAKE THE BALL') Match.startBowling();
+  }
+}
+
+/* The end of an over while you are batting. The ends change and the bowler
+   changes, and running straight on made a five-over innings one long ball. */
+function drawOverEnd(dt) {
+  Match.overT += dt;
+  drawScene();
+  drawBroadcast();
+  ctx.fillStyle = 'rgba(8,10,16,0.72)'; ctx.fillRect(0, 0, VW, VH);
+  const b = M.bat;
+  const over = Math.floor(b.balls / 6);
+  const next = M.attack[over % M.attack.length];
+  Art.text('END OF THE OVER', VW / 2, 150, 46, PAL.white);
+  Art.text(over + ' of ' + b.overs + '   ·   ' + b.overRuns +
+           (b.overRuns === 1 ? ' run off it' : ' runs off it'),
+           VW / 2, 196, 24, 'rgba(255,255,255,0.75)');
+  Art.text(M.myScore() + '-' + Math.min(10, b.wickets), VW / 2, 300, 78, PAL.gold);
+  const st = M.striker();
+  Art.text(st.name + '  ' + st.runs + ' (' + st.balls + ')', VW / 2, 350, 24, PAL.white);
+  Art.text('NEXT OVER', VW / 2, 424, 18, 'rgba(255,255,255,0.6)');
+  Art.text(next.name + '   ·   ' + next.style.name, VW / 2, 458, 26, PAL.gold);
+  if (Match.overT > 0.7) {
+    uiBtn(VW / 2 - 180, 512, 360, 70, 'PLAY ON', null, true);
+    if (uiTake() === 'PLAY ON') {
+      b.overRuns = 0;
+      Match.screen = 'match';
+      Bat.nextBall();
+    }
+  }
+}
+
+/* Your spell is done and the innings is not. It used to cut to the result;
+   it now runs the remaining overs past you one at a time, so a chase that
+   went to the last over reads like one. */
+function drawRunOut(dt) {
+  const R = Match.runOut;
+  R.t += dt;
+  while (R.shown < R.overs.length && R.t > 0.30 + R.shown * 0.30) R.shown++;
+  ctx.fillStyle = PAL.ink; ctx.fillRect(0, 0, VW, VH);
+  Art.text('THE REST OF THE INNINGS', VW / 2, 74, 30, 'rgba(255,255,255,0.7)');
+  Art.text(M.oppo.name, VW / 2, 118, 26, PAL.gold);
+  const rows = R.overs.slice(0, R.shown);
+  const top = 160, rowH = 38;
+  const shown = rows.slice(-11);
+  shown.forEach((o, i) => {
+    const y = top + i * rowH;
+    ctx.fillStyle = i % 2 ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.02)';
+    ctx.fillRect(VW / 2 - 420, y, 840, rowH - 4);
+    Art.text('OV ' + o.over, VW / 2 - 404, y + 26, 19, 'rgba(255,255,255,0.6)', 'left');
+    Art.text(o.who, VW / 2 - 330, y + 26, 20, PAL.white, 'left');
+    Art.text(o.runs + (o.wickets ? '   ·   ' + o.wickets + ' WKT' : ''),
+             VW / 2 + 150, y + 26, 20, o.wickets ? PAL.gold : 'rgba(255,255,255,0.8)', 'right');
+    Art.text(o.at, VW / 2 + 404, y + 26, 22, PAL.gold, 'right');
+  });
+  if (R.shown >= R.overs.length) {
+    uiBtn(VW / 2 - 180, VH - 84, 360, 66, 'SEE IT OUT', null, true);
+    if (uiTake() === 'SEE IT OUT') Match.endTheirInnings();
+  } else if (Input.takeTap()) {
+    R.shown = R.overs.length;
   }
 }
 
@@ -4020,77 +4381,105 @@ function cardRow(c, x, y, w, you) {
 
 function drawScorecard() {
   ctx.fillStyle = PAL.ink; ctx.fillRect(0, 0, VW, VH);
-  const b = M.bat, w = M.bowl;
   Art.text(M.ground + '   ·   ' + M.format.name + '   ·   ' + M.light.name,
-           VW / 2, 54, 24, PAL.gold);
+           VW / 2, 46, 22, PAL.gold);
+
+  /* A Test is four innings and a screen this size holds two, so the pairs
+     get a tab each rather than a wall of numbers nobody can read. */
+  const ours = M.log.filter(e => e.side === 'us');
+  const theirs = M.log.filter(e => e.side === 'them');
+  const pairs = Math.max(1, Math.max(ours.length, theirs.length));
+  Match.cardInns = clamp(Match.cardInns, 0, pairs - 1);
+  const n = Match.cardInns;
+  const us = ours[n] || { card: M.myCard, runs: M.bat.teamRuns, wickets: M.bat.wickets,
+                          extras: M.bat.extras, balls: M.bat.balls };
+  const them = theirs[n] || { card: M.theirCard, runs: M.bowl.runs, wickets: M.bowl.wickets,
+                              extras: M.bowl.extras, balls: M.bowl.balls };
+  let top = 74;
+  if (pairs > 1) {
+    for (let i = 0; i < pairs; i++) {
+      uiBtn(VW / 2 - pairs * 92 + i * 184, 66, 176, 40,
+            (i === 0 ? '1ST' : '2ND') + ' INNINGS', null, i === n, 'INN' + i);
+    }
+    top = 116;
+  }
 
   const colW = 596, left = VW / 2 - colW - 14, right = VW / 2 + 14;
+  const oversOf = e => Math.floor(e.balls / 6) + '.' + (e.balls % 6);
   const head = (x, title, score) => {
-    ctx.fillStyle = '#12294a'; ctx.fillRect(x, 74, colW, 42);
-    Art.text(title, x + 12, 102, 21, PAL.white, 'left');
-    Art.text(score, x + colW - 12, 102, 24, PAL.gold, 'right');
+    ctx.fillStyle = '#12294a'; ctx.fillRect(x, top, colW, 40);
+    Art.text(title, x + 12, top + 27, 20, PAL.white, 'left');
+    Art.text(score, x + colW - 12, top + 27, 23, PAL.gold, 'right');
   };
-  head(left, M.us.name, b.teamRuns + ' all out');
-  head(right, M.oppo.name, w.runs + '-' + w.wickets +
-       ' (' + Math.floor(w.balls / 6) + '.' + (w.balls % 6) + ')');
+  head(left, M.us.name, us.runs + '-' + Math.min(10, us.wickets) + ' (' + oversOf(us) + ')');
+  head(right, M.oppo.name, them.runs + '-' + them.wickets + ' (' + oversOf(them) + ')');
 
-  M.myCard.forEach((c, i) => {
-    const y = 124 + i * 30;
-    if (i % 2) { ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fillRect(left, y, colW, 28); }
-    cardRow(c, left, y, colW, !!c.you);
-  });
-  M.theirCard.forEach((c, i) => {
-    const y = 124 + i * 30;
-    if (i % 2) { ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fillRect(right, y, colW, 28); }
-    cardRow(c, right, y, colW, false);
-  });
+  const rowY = i => top + 48 + i * 28;
+  const column = (card, x) => {
+    card.forEach((c, i) => {
+      const y = rowY(i);
+      if (i % 2) { ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fillRect(x, y, colW, 26); }
+      cardRow(c, x, y, colW, !!c.you);
+    });
+  };
+  column(us.card, left);
+  column(them.card, right);
   // extras, because a card without them does not add up
-  Art.text('EXTRAS', left + 12, 124 + 11 * 30 + 20, 16, 'rgba(255,255,255,0.55)', 'left');
-  Art.text(String(M.bat.extras || 0), left + colW - 74, 124 + 11 * 30 + 20, 18, PAL.white, 'right');
-  Art.text('EXTRAS', right + 12, 124 + 11 * 30 + 20, 16, 'rgba(255,255,255,0.55)', 'left');
-  Art.text(String(M.bowl.extras || 0), right + colW - 74, 124 + 11 * 30 + 20, 18, PAL.white, 'right');
+  const ey = rowY(11) + 18;
+  Art.text('EXTRAS', left + 12, ey, 16, 'rgba(255,255,255,0.55)', 'left');
+  Art.text(String(us.extras || 0), left + colW - 74, ey, 18, PAL.white, 'right');
+  Art.text('EXTRAS', right + 12, ey, 16, 'rgba(255,255,255,0.55)', 'left');
+  Art.text(String(them.extras || 0), right + colW - 74, ey, 18, PAL.white, 'right');
 
-  // your own two lines, pulled out
-  ctx.fillStyle = '#1c3f6e'; ctx.fillRect(left, 490, colW * 2 + 28, 52);
-  Art.text('YOU', left + 14, 522, 22, PAL.white, 'left');
-  Art.text('BATTING  ' + (b.balls === 0 ? 'DNB' : b.runs + ' (' + b.balls + ')'),
-           left + 130, 522, 22, PAL.gold, 'left');
-  const ov = Math.floor(w.balls / 6) + (w.balls % 6 ? '.' + (w.balls % 6) : '');
-  Art.text('BOWLING  ' + (w.balls === 0 ? '—' : ov + '-0-' + w.runs + '-' + w.wickets),
-           left + 470, 522, 22, PAL.gold, 'left');
-  Art.text(M.style.name, left + colW * 2 + 14, 522, 18, 'rgba(255,255,255,0.7)', 'right');
+  // your own two lines, pulled out, over however many innings you played
+  const mine = Match.myInnings();
+  const w = M.bowl;
+  ctx.fillStyle = '#1c3f6e'; ctx.fillRect(left, 512, colW * 2 + 28, 48);
+  Art.text('YOU', left + 14, 542, 21, PAL.white, 'left');
+  Art.text('BATTING  ' + (mine.balls === 0 ? 'DNB' : mine.runs + ' (' + mine.balls + ')'),
+           left + 120, 542, 21, PAL.gold, 'left');
+  const me = M.myAttack[0];
+  const mov = Math.floor(me.balls / 6) + (me.balls % 6 ? '.' + (me.balls % 6) : '');
+  Art.text('BOWLING  ' + (me.balls === 0 ? '—' : mov + '-0-' + me.runs + '-' + me.wickets),
+           left + 470, 542, 21, PAL.gold, 'left');
+  Art.text(M.style.name, left + colW * 2 + 14, 542, 17, 'rgba(255,255,255,0.7)', 'right');
 
-  Art.text('THEIR ATTACK', VW / 2, 572, 17, 'rgba(255,255,255,0.6)');
+  Art.text('THEIR ATTACK', VW / 2, 584, 16, 'rgba(255,255,255,0.6)');
   M.attack.forEach((a, i) => {
     const x = left + i * (colW * 2 + 28) / 4;
-    Art.text(a.name, x + 10, 598, 18, PAL.white, 'left');
-    Art.text(a.style.name, x + 10, 616, 14, 'rgba(255,255,255,0.55)', 'left');
+    Art.text(a.name, x + 10, 608, 17, PAL.white, 'left');
+    Art.text(a.style.name, x + 10, 625, 13, 'rgba(255,255,255,0.55)', 'left');
     const aov = Math.floor(a.balls / 6) + (a.balls % 6 ? '.' + (a.balls % 6) : '');
     Art.text(a.balls ? aov + '-0-' + a.runs + '-' + a.wickets : '—',
-             x + (colW * 2 + 28) / 4 - 20, 606, 19, PAL.gold, 'right');
+             x + (colW * 2 + 28) / 4 - 20, 617, 18, PAL.gold, 'right');
   });
 
-  uiBtn(VW / 2 - 320, VH - 66, 300, 54, 'PLAY AGAIN', null, true);
-  uiBtn(VW / 2 + 20, VH - 66, 300, 54, 'MENU');
+  uiBtn(VW / 2 - 320, VH - 60, 300, 48, 'PLAY AGAIN', null, true);
+  uiBtn(VW / 2 + 20, VH - 60, 300, 48, 'MENU');
   const id = uiTake();
   if (id === 'PLAY AGAIN') Match.toGear(Match.level, M.mode);
   else if (id === 'MENU') { Match.screen = 'menu'; Snd.intensity = 0; }
+  else if (id && id.indexOf('INN') === 0) Match.cardInns = +id.slice(3);
 }
 
 /* The verdict, and whether it made the board. The full card is one tap away
    and is where the detail lives. */
 function drawResult() {
   ctx.fillStyle = PAL.ink; ctx.fillRect(0, 0, VW, VH);
-  const b = M.bat, w = M.bowl;
+  const b = Match.myInnings();
+  const ours = Match.ourRuns(), theirs = Match.theirRuns();
   let head = 'STUMPS';
-  if (M.mode === 'match') head = w.runs > b.teamRuns ? 'BEATEN' : w.runs === b.teamRuns ? 'TIED' : 'WON';
+  if (M.mode === 'match') head = theirs > ours ? 'BEATEN' : theirs === ours ? 'TIED' : 'WON';
   Art.text(head, VW / 2, 138, 78, head === 'WON' ? PAL.gold : PAL.white);
   if (M.mode === 'match') {
-    Art.text(M.us.name + ' ' + b.teamRuns + '   ·   ' + M.oppo.name + ' ' + w.runs + '-' + w.wickets,
+    const line = M.log.map(e => e.runs + '-' + Math.min(10, e.wickets)).join('   ');
+    Art.text(M.us.name + ' ' + ours + '   ·   ' + M.oppo.name + ' ' + theirs,
              VW / 2, 186, 24, 'rgba(255,255,255,0.8)');
+    if (M.format.innings === 2) Art.text(line, VW / 2, 216, 19, 'rgba(255,255,255,0.55)');
+    Art.text(Match.margin ? 'BY ' + Match.margin : '', VW / 2, 246, 20, PAL.gold);
   }
   Art.text(b.balls === 0 ? 'DNB' : b.runs + ' (' + b.balls + ')', VW / 2, 292, 66, PAL.gold);
-  Art.text(b.fours + 'x4   ' + b.sixes + 'x6', VW / 2, 328, 20, 'rgba(255,255,255,0.7)');
+  Art.text(M.bat.fours + 'x4   ' + M.bat.sixes + 'x6', VW / 2, 328, 20, 'rgba(255,255,255,0.7)');
   if (Match.boardPlace >= 0) {
     Art.text('NUMBER ' + (Match.boardPlace + 1) + ' ON YOUR BOARD', VW / 2, 372, 26, PAL.gold);
   }
@@ -4157,6 +4546,8 @@ function frame(ts) {
   else if (Match.screen === 'result') drawResult();
   else if (Match.screen === 'card') drawScorecard();
   else if (Match.screen === 'overs') drawOversScreen();
+  else if (Match.screen === 'overEnd') drawOverEnd(dt);
+  else if (Match.screen === 'runout') drawRunOut(dt);
   else if (Match.screen === 'intro') drawIntro(dt);
   else {
     drawScene();
