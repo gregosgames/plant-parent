@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#7a1420" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<title>Grade Cricket — Swagger &amp; Hostility</title>
+<title>Grade Cricket</title>
 <style>
   /* ===================== SHELL ===================== */
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -194,38 +194,26 @@ const WIN = { middle: 0.052, good: 0.104, edge: 0.176 };
    option set, and it is the same button every time. */
 const STYLES = [
   {
-    key: 'fast', name: 'FAST', short: 'FAST', pace: [21.4, 23.6], restMul: 1.06,
-    scatter: 1.00, hostile: 1.20, blurb: 'Genuine pace. Short and at him.',
-    stock: { label: 'STOCK' },
-    vari:  { label: 'BOUNCER', bouncer: true, limited: true },
-  },
-  {
-    key: 'swing', name: 'SWING', short: 'SWING', pace: [19.4, 21.2], restMul: 0.98,
-    scatter: 0.94, hostile: 0.95, blurb: 'Moves in the air. Pick the direction.',
+    key: 'fast', name: 'FAST', pace: [21.0, 23.4], restMul: 1.05,
+    scatter: 1.00, blurb: 'Pace, and it moves in the air. Pick which way.',
     stock: { label: 'OUTSWINGER', swing:  1.15 },
     vari:  { label: 'INSWINGER',  swing: -1.15 },
   },
   {
-    key: 'seam', name: 'SEAM', short: 'SEAM', pace: [19.2, 21.0], restMul: 1.00,
-    scatter: 1.08, hostile: 1.00, blurb: 'Moves off the pitch. Never certain.',
-    stock: { label: 'SEAM AWAY', turn:  1.15, wobble: 0.85 },
-    vari:  { label: 'SEAM IN',   turn: -1.15, wobble: 0.85 },
+    key: 'medium', name: 'MEDIUM PACE', pace: [17.0, 19.0], restMul: 0.96,
+    scatter: 0.80, blurb: 'Nothing quick. Everything on the spot.',
+    stock: { label: 'STOCK', swing: 0.5 },
+    vari:  { label: 'SLOWER BALL', paceMul: 0.80, swing: 0.5, loop: true },
   },
   {
-    key: 'medium', name: 'MEDIUM PACE', short: 'MEDIUM', pace: [17.0, 18.8], restMul: 0.94,
-    scatter: 0.78, hostile: 0.75, blurb: 'Nothing quick. Everything on the spot.',
-    stock: { label: 'STOCK', swing: 0.45 },
-    vari:  { label: 'SLOWER BALL', paceMul: 0.80, swing: 0.45, loop: true },
-  },
-  {
-    key: 'finger', name: 'FINGER SPIN', short: 'OFF SPIN', pace: [13.0, 14.6], restMul: 1.04,
-    scatter: 0.86, hostile: 0.70, blurb: 'Off breaks, turning back in.',
+    key: 'finger', name: 'FINGER SPIN', pace: [13.0, 14.6], restMul: 1.04,
+    scatter: 0.86, blurb: 'Off breaks, turning back in.',
     stock: { label: 'OFF BREAK', turn: -2.0 },
     vari:  { label: 'ARM BALL',  turn: -0.1, swing: 0.7 },
   },
   {
-    key: 'wrist', name: 'WRIST SPIN', short: 'LEG SPIN', pace: [11.8, 13.6], restMul: 1.08,
-    scatter: 1.14, hostile: 0.70, blurb: 'Leg breaks that spin away. Or not.',
+    key: 'wrist', name: 'WRIST SPIN', pace: [11.8, 13.6], restMul: 1.08,
+    scatter: 1.14, blurb: 'Leg breaks that spin away. Or not.',
     stock: { label: 'LEG BREAK', turn:  2.3 },
     vari:  { label: 'GOOGLY',    turn: -2.1 },
   },
@@ -233,11 +221,72 @@ const STYLES = [
 const styleByKey = k => STYLES.find(s => s.key === k) || STYLES[0];
 const isSpin = s => s.key === 'finger' || s.key === 'wrist';
 
-/* The opposition attack. Invented names — the reference is the behaviour,
-   never a person. Each bowler owns an over and the style changes with him,
-   which is most of the variety you meet while batting. */
-const SURNAMES = ['CADOGAN', 'MARCHAND', 'ST CLAIR', 'QUASHIE', 'BRIMMER', 'ODEAL',
-                  'TANNIS', 'VELLINGTON', 'SPRIGGS', 'DUNCASTER'];
+/* The cast.
+
+   These are invented names with a nation and an era attached, not parodies of
+   particular cricketers. The design's rule about the real players — archetypes
+   and never portraits — applies at least as hard to names as it does to
+   batting styles: pinning a recognisable person's name on a fictional player
+   who then gets out for a duck is a different thing from evoking an era, and
+   only the second one is worth doing. So the flavour is the flavour of Test
+   cricket between the seventies and the twenty-tens, and nobody in here is
+   anybody. */
+const NATIONS = [
+  { code: 'WI', name: 'WEST INDIES', cap: '#7a1420', kit: '#8f1c2b' },
+  { code: 'AUS', name: 'AUSTRALIA',  cap: '#0d5b3a', kit: '#12734a' },
+  { code: 'ENG', name: 'ENGLAND',    cap: '#0e3a6b', kit: '#164e8c' },
+  { code: 'IND', name: 'INDIA',      cap: '#123f7a', kit: '#1c56a3' },
+  { code: 'PAK', name: 'PAKISTAN',   cap: '#0b5136', kit: '#0f6b47' },
+  { code: 'NZ',  name: 'NEW ZEALAND',cap: '#1d1d1f', kit: '#2b2b2f' },
+  { code: 'SA',  name: 'SOUTH AFRICA', cap: '#0f5f43', kit: '#147954' },
+  { code: 'SL',  name: 'SRI LANKA',  cap: '#123f7a', kit: '#1b5aa8' },
+];
+
+const CAST = {
+  WI:  ['CADOGAN', 'ST CLAIR', 'QUASHIE', 'BRIMMER', 'ODEAL', 'TANNIS', 'MARCHAND',
+        'BELGRAVE', 'SEALY', 'ARCHIBOLD'],
+  AUS: ['HAYDOCK', 'PONTLEY', 'MERRIWEATHER', 'DUNCASTER', 'BRAYSHAW', 'KILLARNEY',
+        'WHITTAKER', 'CORRIGAN', 'MURRUMBEE'],
+  ENG: ['WHITCOMBE', 'ELDERKIN', 'PENHALE', 'BRACEWORTH', 'HOLLOWAY', 'SEDGEBROOK',
+        'FAIRHURST', 'CHOLMLEY', 'ATHERSTONE'],
+  IND: ['RAGHUNATH', 'DESHMUKH', 'IYENGAR', 'NATARAJAN', 'CHOWDHRY', 'BHANDARI',
+        'SRIVASTAVA', 'MUKHOPADHYA', 'VENKATESAN'],
+  PAK: ['SHAHZADI', 'MEHRAB', 'QURESHI', 'JAMSHED', 'NADEEMI', 'FAROOQI',
+        'ZULFIQAR', 'RASHEEDI', 'BAKHTIAR'],
+  NZ:  ['RANGIORA', 'McKELVIE', 'TASMAN', 'BRIERLEY', 'ASHBURTON', 'CULVERDEN',
+        'WAIMEA', 'HOKITANE', 'PLIMMER'],
+  SA:  ['VAN DER BERGH', 'STEENKAMP', 'PRETORIUS', 'KRUGER', 'BOTHMA',
+        'OOSTHUIZEN', 'LOUBSER', 'VAN ZYL', 'MARITZ'],
+  SL:  ['WEERASINGHE', 'ABEYRATNE', 'GUNAWARDANA', 'DISSANAYAKE', 'RANASINGHE',
+        'JAYASURENDRA', 'WICKRAMANAYAKE', 'SAMARAWEERA', 'KULATUNGE'],
+};
+
+/* An initial and a surname, the way a card reads — and the initial is what
+   keeps eleven men distinct out of a pool of seven surnames. */
+const INITIALS = 'ABCDEFGHIJKLMNPRSTVW';
+
+function castMember(nation, used) {
+  const pool = CAST[nation.code];
+  for (let guard = 0; guard < 200; guard++) {
+    const n = pick(INITIALS) + '. ' + pick(pool);
+    if (used.indexOf(n) < 0) { used.push(n); return { name: n, nation: nation }; }
+  }
+  const fallback = used.length + '. ' + pool[0];
+  used.push(fallback);
+  return { name: fallback, nation: nation };
+}
+
+/* Skin tones and kit. Both are the player's, both are two taps on one screen,
+   and the whites option is there because most of the era this game is set in
+   was played in them. */
+const SKINS = ['#f0cba6', '#dda877', '#b97f4e', '#8d5a32', '#603a20', '#3c2417'];
+const KITS = [
+  { key: 'whites',  name: 'WHITES',   shirt: '#efe9d8', trim: '#7a1420', pads: '#f6f2e6' },
+  { key: 'maroon',  name: 'MAROON',   shirt: '#7a1420', trim: '#e8b923', pads: '#f2ecdc' },
+  { key: 'blue',    name: 'ROYAL',    shirt: '#1f4f8a', trim: '#e8e2d0', pads: '#f2ecdc' },
+  { key: 'green',   name: 'BOTTLE',   shirt: '#0f6b47', trim: '#e8b923', pads: '#f2ecdc' },
+];
+const kitByKey = k => KITS.find(v => v.key === k) || KITS[0];
 
 /* ===================== FIELDING POSITIONS =====================
    Real positions, at the angles and distances they are actually set. `a` is
@@ -286,32 +335,41 @@ const COVERING = [
   ['fineLeg', 'shortFineLeg', 'backwardSquare'],   // GLANCE
 ];
 
-/* Two tiers is the whole ladder in the slice. The jump between them is a
-   perceptual shock in the first over, not a difficulty multiplier. */
-const TIERS = [
+/* Easy, medium, hard. What changes is how much time you get and how good
+   they are — the pace of the bowling, how wayward it is, how long the length
+   marker stays up, how quickly the field moves, and how big the ground is.
+   Nothing is a difficulty multiplier on the outcome; every one of these is a
+   window width or a distance. */
+const LEVELS = [
   {
-    key: 'club', name: 'VILLAGE CLUB', short: 'CLUB',
-    paceMul: 0.94, wayward: 0.42, markerLead: 0.62,
-    aiSigma: 0.088, aiWindow: 1.0, newBatter: 0.15,
-    liveField: false, dossier: false, fieldSpread: 0.90, boundary: 54,
-    fieldSpeed: 6.0, fieldReact: 0.36,
-    field: FIELDS.club, attack: ['medium', 'fast', 'medium', 'finger'],
-    crowd: 0.35, colour: '#c98a2e',
+    key: 'easy', name: 'EASY', blurb: 'Slower, wider, and the pitch marker stays up.',
+    paceMul: 0.90, wayward: 0.46, markerLead: 0.70,
+    aiSigma: 0.098, aiWindow: 1.05, newBatter: 0.18,
+    dossier: false, fieldSpread: 0.86, boundary: 52,
+    fieldSpeed: 5.6, fieldReact: 0.40,
+    field: FIELDS.club, attack: ['medium', 'medium', 'finger', 'fast'],
+    colour: '#5fd07a',
   },
   {
-    key: 'island', name: 'ISLAND SENIOR', short: 'ISLAND',
-    paceMul: 1.0, wayward: 0.19, markerLead: 0.40,
-    aiSigma: 0.066, aiWindow: 0.92, newBatter: 0.0,
-    liveField: true, dossier: true, fieldSpread: 1.0, boundary: 62,
-    fieldSpeed: 7.3, fieldReact: 0.22,
-    field: FIELDS.island, attack: ['fast', 'swing', 'seam', 'wrist'],
-    crowd: 0.7, colour: '#e8b923',
+    key: 'medium', name: 'MEDIUM', blurb: 'Quicker, straighter, and less warning.',
+    paceMul: 0.98, wayward: 0.30, markerLead: 0.44,
+    aiSigma: 0.082, aiWindow: 0.96, newBatter: 0.08,
+    dossier: false, fieldSpread: 0.94, boundary: 56,
+    fieldSpeed: 6.5, fieldReact: 0.30,
+    field: FIELDS.club, attack: ['fast', 'medium', 'finger', 'wrist'],
+    colour: '#e8b923',
+  },
+  {
+    key: 'hard', name: 'HARD', blurb: 'No marker. They have worked you out.',
+    paceMul: 1.06, wayward: 0.18, markerLead: 0.0,
+    aiSigma: 0.066, aiWindow: 0.90, newBatter: -0.06,
+    dossier: true, fieldSpread: 1.0, boundary: 62,
+    fieldSpeed: 7.4, fieldReact: 0.21,
+    field: FIELDS.island, attack: ['fast', 'fast', 'wrist', 'finger'],
+    colour: '#d0483f',
   },
 ];
 
-/* Graded for 1980s outside-broadcast rather than for a modern camera: a
-   yellower grass, a paler warmer sky, cream instead of white, and the kit
-   colours of the coloured-clothing era rather than of a laundry advert. */
 const PAL = {
   sky: '#5fb0dc', skyHi: '#abd9ea',
   grass: '#4d9c3e', grassDark: '#3f8834', grassLight: '#63b352',
@@ -323,7 +381,7 @@ const PAL = {
   board: ['#c4342b', '#e0a51e', '#20507f', '#e8e2d0', '#2c7a4b'],
 };
 /* ===================== SMALL UTILITIES ===================== */
-const boundaryR = () => (M && M.tier && M.tier.boundary) || BOUNDARY;
+const boundaryR = () => (M && M.level && M.level.boundary) || BOUNDARY;
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const lerp = (a, b, t) => a + (b - a) * t;
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -350,25 +408,48 @@ const Portal = {
   happy() { try { this.sdk && this.sdk.game.happytime(); } catch (e) {} },
 };
 
-/* ===================== SAVE ===================== */
+/* ===================== SAVE =====================
+   One key, holding the player you made and the innings you have played. The
+   board is local — the game is a single file with no network calls of its
+   own, so an online board would need a server this build does not have. It
+   is stored in the shape a server would want, so wiring one up later is a
+   fetch, not a rewrite. */
 const Save = {
-  key: 'grade-cricket-v1',
-  data: { bestRuns: 0, bestFigs: null, played: 0, seen: false },
+  key: 'grade-cricket-v2',
+  data: {
+    player: { name: 'YOU', cap: 'helmet', skin: 2, kit: 'whites' },
+    board: [],                           // [{ name, runs, balls, level, when }]
+    played: 0, seen: false,
+  },
   load() {
     try {
       const raw = localStorage.getItem(this.key);
-      if (raw) Object.assign(this.data, JSON.parse(raw));
+      if (raw) {
+        const d = JSON.parse(raw);
+        Object.assign(this.data, d);
+        Object.assign(this.data.player, { name: 'YOU', cap: 'helmet', skin: 2, kit: 'whites' }, d.player || {});
+        if (!Array.isArray(this.data.board)) this.data.board = [];
+      }
     } catch (e) { /* private mode — play on, just don't remember */ }
   },
   save() {
     try { localStorage.setItem(this.key, JSON.stringify(this.data)); } catch (e) {}
+  },
+  best() { return this.data.board.length ? this.data.board[0].runs : 0; },
+  /* Innings go on the board sorted by runs, and the board keeps ten. */
+  record(entry) {
+    this.data.board.push(entry);
+    this.data.board.sort((a, b) => b.runs - a.runs || a.balls - b.balls);
+    this.data.board = this.data.board.slice(0, 10);
+    this.save();
+    return this.data.board.indexOf(entry);
   },
 };
 
 /* ===================== AUDIO =====================
    The soundtrack is a feedback instrument, not a backing track. A layered
    percussion loop is scheduled ahead of the audio clock; which layers are
-   audible is driven by Swagger when batting and Hostility when bowling. The
+   audible is driven by Swagger when batting and by wickets when bowling. The
    player feels the meter before they read it. Everything is synthesised —
    no sample files, so the game stays a single portable file. */
 const Snd = {
@@ -410,7 +491,7 @@ const Snd = {
     return buf;
   },
 
-  /* Crowd bed: filtered noise whose brightness and level is the tier readout.
+  /* Crowd bed: filtered noise whose brightness and level is the level readout.
      Close and personal at club level, a wall internationally. */
   startCrowd() {
     const src = this.ctx.createBufferSource();
@@ -765,10 +846,10 @@ function figureAnchors(x, z, o) {
 }
 
 function drawHead(head, headR, o, u, dirHint) {
-  Art.disc(head, headR, '#2a2118');
+  Art.disc(head, headR, o.skin || '#8d5a32');
   const dir = dirHint === undefined ? o.face : dirHint;
   if (o.cap === 'cap') {
-    ctx.fillStyle = o.shirt === PAL.maroon ? PAL.gold : PAL.maroon;
+    ctx.fillStyle = o.capCol || (o.shirt === PAL.maroon ? PAL.gold : PAL.maroon);
     ctx.beginPath(); ctx.arc(head.x, head.y, headR * 1.10, Math.PI, 0); ctx.fill();
     ctx.fillRect(head.x + (dir < 0 ? -headR * 2.0 : 0), head.y - headR * 0.18, headR * 2.0, headR * 0.36);
   } else if (o.cap === 'helmet') {
@@ -838,7 +919,7 @@ function drawFigureSide(x, z, o) {
   const footF = limbFrom(kneeF, o.legF * 0.30, H * 0.24, dir);
   const kneeB = limbFrom(hip, o.legB, H * 0.24, dir);
   const footB = limbFrom(kneeB, o.legB * 0.30, H * 0.24, dir);
-  const legCol = o.pads ? PAL.white : o.shirt;
+  const legCol = o.pads ? (o.padCol || PAL.white) : o.shirt;
   const legW = lw * (o.pads ? 2.2 : 1);
   Art.line(hip, kneeB, legW * 0.92, legCol); Art.line(kneeB, footB, legW * 0.92, legCol);
   Art.line(hip, kneeF, legW, legCol);       Art.line(kneeF, footF, legW, legCol);
@@ -869,7 +950,7 @@ function drawFigureFacing(x, z, o) {
   const footL = limbFrom(kneeL, -o.legL * 0.35, H * 0.24);
   const kneeR = limbFrom(hip, o.legR, H * 0.24);
   const footR = limbFrom(kneeR, o.legR * 0.35, H * 0.24);
-  const legCol = o.pads ? PAL.white : o.shirt;
+  const legCol = o.pads ? (o.padCol || PAL.white) : o.shirt;
   const legW = lw * (o.pads ? 2.1 : 1);
   Art.line(hip, kneeL, legW, legCol); Art.line(kneeL, footL, legW, legCol);
   Art.line(hip, kneeR, legW, legCol); Art.line(kneeR, footR, legW, legCol);
@@ -891,7 +972,7 @@ function drawFigureFacing(x, z, o) {
 const FIG_DEFAULTS = {
   view: 'side', face: -1, shirt: PAL.maroon, pads: false, bat: false, cap: 'helmet',
   lean: 0, tilt: 0, crouch: 0, height: 1.82, batAng: -40, scale: 1, alpha: 1,
-  trim: null,
+  trim: null, skin: null, padCol: null, capCol: null,
   armF: 30, armB: -22, legF: 18, legB: -18,       // side rig
   armL: 22, armR: 22, legL: 16, legR: 16,          // facing rig
 };
@@ -948,7 +1029,7 @@ function fillArcRegion(arc, colour) {
   Art.poly(pts, colour);
 }
 
-function drawGround(tier) {
+function drawGround(level, withBoards) {
   const hz = horizonY();
   const sky = ctx.createLinearGradient(0, 0, 0, Math.max(40, hz));
   sky.addColorStop(0, PAL.skyHi);
@@ -957,7 +1038,7 @@ function drawGround(tier) {
   ctx.fillRect(0, 0, VW, VH);
 
   // everything on the ground and outside the rope
-  ctx.fillStyle = tier.key === 'club' ? '#7d8f5a' : '#5b6f7d';
+  ctx.fillStyle = level.key === 'hard' ? '#5b6f7d' : '#7d8f5a';
   ctx.fillRect(0, Math.max(0, hz), VW, VH - Math.max(0, hz));
 
   const R = boundaryR();
@@ -999,8 +1080,6 @@ function drawGround(tier) {
     ctx.stroke();
   }
 
-  drawBoards(R);
-
   // the square, then the strip: both converge properly now
   Art.poly([
     proj(-4, 0, -5.0), proj(PITCH_LEN + 4, 0, -5.0),
@@ -1016,6 +1095,8 @@ function drawGround(tier) {
     proj(14.0, 0.005, 0.9), proj(6.5, 0.005, 0.9),
   ], PAL.pitchEdge);                     // the worn patch, halfway down
   ctx.globalAlpha = 1;
+
+  if (withBoards) drawBoards(R);
 
   ctx.strokeStyle = 'rgba(255,255,255,0.85)';
   ctx.lineWidth = Math.max(1, 2 * (Cam.f / 940));
@@ -1046,7 +1127,7 @@ function drawBoards(R) {
 
 /* A sightscreen straight behind the bowler's arm. It is furniture, but it
    is also what makes a red ball readable against a crowd. */
-function drawSightscreen(tier) {
+function drawSightscreen(level) {
   const R = boundaryR();
   const sx = PITCH_LEN / 2 - (R + 4);
   const a = proj(sx, 0, -6.5), b = proj(sx, 0, 6.5);
@@ -1056,10 +1137,10 @@ function drawSightscreen(tier) {
   Art.poly([proj(sx, 0, -6.5), proj(sx, 0, 6.5), proj(sx, 0.35, 6.5), proj(sx, 0.35, -6.5)], '#c3bfae');
 }
 
-function drawCrowd(tier) {
+function drawCrowd(level) {
   // Close and individual at club level; above that a texture whose density
-  // is the tier readout.
-  const density = tier.key === 'club' ? 90 : 260;
+  // is the level readout.
+  const density = level.key === 'easy' ? 110 : level.key === 'medium' ? 190 : 280;
   const R = boundaryR() + 7;
   for (let i = 0; i < density; i++) {
     const a = (i / density) * TAU + 0.13;
@@ -1067,7 +1148,7 @@ function drawCrowd(tier) {
     const p = proj(PITCH_LEN / 2 + Math.cos(a) * rr, 0, Math.sin(a) * rr);
     if (p.behind || p.y < 20 || p.y > VH + 40 || p.x < -60 || p.x > VW + 60) continue;
     const r = clamp(0.34 * p.s * PPM, 1.1, 26);
-    ctx.fillStyle = 'hsl(' + ((i * 47) % 360) + ',62%,' + (tier.key === 'club' ? 56 : 44) + '%)';
+    ctx.fillStyle = 'hsl(' + ((i * 47) % 360) + ',62%,' + (level.key === 'easy' ? 56 : 46) + '%)';
     ctx.beginPath(); ctx.arc(p.x, p.y - r * 2.6, r, 0, TAU); ctx.fill();
     ctx.fillRect(p.x - r * 0.85, p.y - r * 1.9, r * 1.7, r * 2.0);
   }
@@ -1223,9 +1304,9 @@ const Ball = {
    the rope; island adds a gully and pushes one back. From island senior
    the Dossier moves a man into whichever zone you have actually been
    scoring in — diversify or wear it. */
-function placeFielder(key, tier, R) {
+function placeFielder(key, level, R) {
   const p = POS[key];
-  const r = p.deep ? p.r * R : p.r * tier.fieldSpread;
+  const r = p.deep ? p.r * R : p.r * level.fieldSpread;
   const a = p.a + rnd(-2.5, 2.5);
   const rr = r + rnd(-1.0, 1.0);
   const f = {
@@ -1238,12 +1319,12 @@ function placeFielder(key, tier, R) {
   return f;
 }
 
-function buildField(tier, dossier) {
-  const R = tier.boundary;
-  const names = tier.field.slice();
+function buildField(level, dossier) {
+  const R = level.boundary;
+  const names = level.field.slice();
   let flagged = null;
 
-  if (tier.dossier && dossier) {
+  if (level.dossier && dossier) {
     let best = 0;
     for (let i = 1; i < dossier.length; i++) if (dossier[i] > dossier[best]) best = i;
     if (dossier[best] >= 3) {
@@ -1261,10 +1342,10 @@ function buildField(tier, dossier) {
     }
   }
 
-  const f = names.map(k => placeFielder(k, tier, R));
+  const f = names.map(k => placeFielder(k, level, R));
   if (flagged) { const m = f.find(p => p.key === flagged); if (m) m.flagged = true; }
 
-  const keeper = placeFielder('keeper', tier, R);
+  const keeper = placeFielder('keeper', level, R);
   keeper.keeper = true; keeper.z = -0.05; keeper.hz = -0.05;
   f.push(keeper);
 
@@ -1326,10 +1407,10 @@ function playShot(o) {
    the honest version: the ball keeps rolling, a fielder has to get to it,
    pick it up and throw it in, and the batters take whatever that clock lets
    them have. Two and three come out of it on their own. */
-/* How good they are is a tier signal in its own right: a club ring gives
+/* How good they are is a level signal in its own right: a club ring gives
    you the half-second an island ring does not. */
-const fieldSpeed = () => (M && M.tier && M.tier.fieldSpeed) || 6.6;
-const fieldReact = () => (M && M.tier && M.tier.fieldReact) || 0.30;
+const fieldSpeed = () => (M && M.level && M.level.fieldSpeed) || 6.6;
+const fieldReact = () => (M && M.level && M.level.fieldReact) || 0.30;
 const FIELD_REACH = 2.0;      // dive, or a stuck-out boot
 const THROW_SPEED = 24;
 const THROW_RELEASE = 0.35;
@@ -1562,7 +1643,9 @@ const Chase = {
     const a = lerp(CREASE_X - 0.3, FAR_CREASE_X + 0.3, flip ? 1 - frac : frac);
     const b = lerp(FAR_CREASE_X + 0.3, CREASE_X - 0.3, flip ? 1 - frac : frac);
     const cyc = Math.sin(this.t * 15) * 26;
-    const one = { view: 'side', face: flip ? 1 : -1, shirt: shirt, pads: true,
+    const K = M.phase === 'bat' ? myKit() : theirKit();
+    const one = { view: 'side', face: flip ? 1 : -1, shirt: K.shirt, trim: K.trim,
+                  padCol: K.pads, capCol: K.cap, skin: K.skin, pads: true,
                   cap: 'helmet', bat: true, batAng: 62, scale: 0.96,
                   legF: 16 + cyc, legB: -16 + cyc,
                   armF: 34 - cyc * 0.6, armB: 24 + cyc * 0.6, lean: 1.6 };
@@ -1761,9 +1844,9 @@ function screenFromAim(ang) {
 
 /* ===================== MATCH STATE ===================== */
 const M = {
-  tier: TIERS[0], mode: 'match', phase: 'bat',
+  level: LEVELS[0], mode: 'match', phase: 'bat',
   gear: 'helmet', style: STYLES[0],
-  swagger: 0, hostility: 0,
+  swagger: 0,
   dossier: [0, 0, 0, 0, 0, 0],
   bat: null, bowl: null, field: null, attack: null,
   msg: '', msgT: 0, msgBig: false,
@@ -1772,20 +1855,15 @@ const M = {
   batterConf: 0.5,
   showNames: true,
 
-  reset(tier, mode) {
-    this.tier = tier; this.mode = mode;
+  reset(level, mode) {
+    this.level = level; this.mode = mode;
     this.phase = mode === 'bowlPractice' ? 'bowl' : 'bat';
-    this.swagger = 0; this.hostility = 0;
+    this.swagger = 0;
     this.dossier = [0, 0, 0, 0, 0, 0];
     this.bowlerMood = 0; this.batterConf = 0.5;
-    // the four they have. One over each, then round again.
-    const used = [];
-    this.attack = tier.attack.map(k => {
-      let n = pick(SURNAMES);
-      while (used.indexOf(n) >= 0) n = pick(SURNAMES);
-      used.push(n);
-      return { name: n, style: styleByKey(k) };
-    });
+    // who you are playing, and who you are playing for
+    this.oppo = pick(NATIONS);
+    this.us = pick(NATIONS.filter(n => n !== this.oppo));
     this.bat = {
       runs: 0, balls: 0, fours: 0, sixes: 0, out: false, howOut: '',
       overs: mode === 'batPractice' ? 99 : 5, teamRuns: 0,
@@ -1793,13 +1871,44 @@ const M = {
     };
     this.bowl = {
       overs: mode === 'bowlPractice' ? 99 : 5, balls: 0, runs: 0, wickets: 0,
-      maxWickets: 10, variLeft: 2, corridor: 0, lastBands: [], target: 0,
+      maxWickets: 10, variLeft: 2, lastBands: [], target: 0,
     };
-    this.field = buildField(tier, null);
+    this.field = buildField(level, null);
+
+    // their eleven, and yours. You bat four; the rest of your side is simmed
+    // at the innings break to add up to the total you are defending.
+    const used = [];
+    this.theirCard = [];
+    for (let i = 0; i < 11; i++) {
+      const m = castMember(this.oppo, used);
+      this.theirCard.push({ name: m.name, runs: 0, balls: 0, out: false, how: '' });
+    }
+    this.theirOut = 0;
+    // Their attack is four of the same eleven, taken from the bottom of the
+    // order, because the men who bowl at you are the men you bowl at — the
+    // first pass drew two separate name lists and the card read as though
+    // they had turned up with a second team.
+    this.attack = level.attack.map((k, i) => {
+      const man = this.theirCard[10 - i];
+      return { name: man.name, style: styleByKey(k), balls: 0, runs: 0, wickets: 0 };
+    });
+    const mine = [];
+    this.myCard = [];
+    for (let i = 0; i < 11; i++) {
+      const m = castMember(this.us, mine);
+      this.myCard.push({ name: m.name, runs: 0, balls: 0, out: false, how: 'dnb' });
+    }
+    this.myCard[3] = { name: Save.data.player.name || 'YOU', you: true,
+                       runs: 0, balls: 0, out: false, how: 'not out' };
+
     this.msg = ''; this.msgT = 0;
     Chase.stop(); Take.stop(); Catcher.clear();
   },
   bowlerNow() { return this.attack[Math.floor(this.bat.balls / 6) % this.attack.length]; },
+  /* Whoever is on strike for them. Their card is filled in as the innings
+     happens rather than invented at the end, so the scorecard is a record of
+     what you actually did to them. */
+  theirBatter() { return this.theirCard[Math.min(this.theirOut, 10)]; },
   say(text, big) { this.msg = text; this.msgT = now(); this.msgBig = !!big; },
 };
 
@@ -1820,7 +1929,7 @@ const Bat = {
   bowler: null, runup: 1.35, releaseT: 0,
 
   nextBall() {
-    const T = M.tier;
+    const T = M.level;
     this.phase = 'ready'; this.t = 0; this.swung = false;
     this.outcome = null; this.ghost = null; this.flourish = false;
     this.earlyHold = false; this.backlift = 0; this.swingT = -9;
@@ -1839,7 +1948,7 @@ const Bat = {
     const pressure = M.swagger * 0.55;
     const wayward = T.wayward * (1 + pressure) * S.scatter;
     let bandIdx = 2 + Math.round(randn() * (0.85 + pressure));
-    if (T.liveField && this.lastBackliftZone >= 0) {
+    if (T.dossier && this.lastBackliftZone >= 0) {
       bandIdx += SHOTS[this.lastBackliftZone].likeLen.indexOf('short') >= 0 ? 1 : -1;
     }
     bandIdx = clamp(bandIdx, 0, 4);
@@ -1866,7 +1975,7 @@ const Bat = {
 
   update(dt) {
     this.t += dt;
-    const T = M.tier;
+    const T = M.level;
 
     if (this.phase === 'ready') {
       if (this.t > 0.45) { this.phase = 'runup'; this.t = 0; }
@@ -1901,7 +2010,7 @@ const Bat = {
       if (this.swung && Ball.hit && this.outcome === null) {
         Catcher.update();
         const r = resolveTravel(M.field, {
-          sharpCatching: T.liveField,
+          sharpCatching: T.dossier,
           edged: this.swingInfo && this.swingInfo.quality === 'edge',
         });
         if (r) this.finish(r);
@@ -1933,7 +2042,7 @@ const Bat = {
   swing(rel) {
     this.swung = true;
     this.swingT = now();
-    const T = M.tier;
+    const T = M.level;
     if (!rel) { this.judgeMiss(true); return; }
 
     const dt = rel.t - this.contactT;
@@ -1968,7 +2077,7 @@ const Bat = {
     this.swingInfo = { type: type, quality: quality, err: dt, approp: approp };
     this.ghost = { intended: aimAng, actual: angle };
     playShot({ quality: quality, power: power, angleDeg: angle, lift: lift, contactY: this.pred.y });
-    Catcher.commit(M.field, { sharpCatching: T.liveField, edged: quality === 'edge' });
+    Catcher.commit(M.field, { sharpCatching: T.dossier, edged: quality === 'edge' });
     Snd.bat(quality === 'edge' ? 'edge' : 'middle');
     if (quality === 'middle') {
       M.hitstop = 0.05; M.flash = 1; Cam.kick(this.flourish ? 0.9 : 0.5);
@@ -2027,13 +2136,21 @@ const Bat = {
     const b = M.bat;
     if (o.wicket) {
       b.out = true; b.howOut = o.how;
+      const mine = M.myCard[3];
+      mine.balls = b.balls; mine.out = true; mine.how = o.how;
       M.swagger = 0;                     // it drops out the ball you get out
-      M.say(b.runs === 0 ? 'GOLDEN DUCK' : o.label, true);
-      Snd.sting(b.runs === 0 && b.balls <= 1 ? 'duck' : 'wicket');
+      // A golden duck is out first ball. Any other nought is just a duck,
+      // and every wicket at nought was being called golden.
+      const golden = b.runs === 0 && b.balls <= 1;
+      if (this.bowler) { this.bowler.balls++; this.bowler.wickets++; }
+      M.say(golden ? 'GOLDEN DUCK' : b.runs === 0 ? 'DUCK' : o.label, true);
+      Snd.sting(golden ? 'duck' : 'wicket');
       Cam.kick(0.7);
       return;
     }
     b.runs += o.runs;
+    const me = M.myCard[3];
+    me.runs = b.runs; me.balls = b.balls;
     // Swagger builds on dominant strokeplay only — boundaries, and attacking
     // shots played to good balls. Milked singles build nothing.
     let gain = 0;
@@ -2048,6 +2165,7 @@ const Bat = {
     else { b.dots++; M.swagger = clamp(M.swagger - (b.dots >= 2 ? 0.16 : 0.08), 0, 1); }
     if (o.runs >= 4) { M.bowlerMood = Math.min(1, M.bowlerMood + 0.4); Snd.sting(o.runs === 6 ? 'six' : 'four'); }
     if (this.ghost) M.dossier[this.zone] += o.runs >= 4 ? 2 : o.runs > 0 ? 1 : 0;
+    if (this.bowler) { this.bowler.balls++; this.bowler.runs += o.runs; }
     M.say(o.label, o.runs >= 4);
   },
 
@@ -2056,7 +2174,7 @@ const Bat = {
     if (b.out || (M.mode !== 'batPractice' && b.balls >= b.overs * 6)) {
       Match.endInnings();
     } else {
-      if (M.tier.dossier && b.balls % 6 === 0) M.field = buildField(M.tier, M.dossier);
+      if (M.level.dossier && b.balls % 6 === 0) M.field = buildField(M.level, M.dossier);
       this.nextBall();
     }
   },
@@ -2069,9 +2187,9 @@ const Bat = {
    from another lives in the ball itself.
 
    Your style decides pace, how much the ball moves and which way, and what
-   your one variation button does. Hostility is still the meter that
-   matters: you are not waiting for a wicket ball, you are making the batter
-   worse, and you can watch it happen. */
+   your one variation button does. There is no bowling meter any more: what
+   you have is the target, the beat and the variation, and the batter's
+   confidence tick tells you whether it is working. */
 const Bowl = {
   phase: 'setup', t: 0,
   target: { x: 16.4, z: 0.30 },
@@ -2190,7 +2308,7 @@ const Bowl = {
 
   startRunup() {
     const S = M.style, del = this.delivery();
-    this.pace = rnd(S.pace[0], S.pace[1]) * M.tier.paceMul * (del.paceMul || 1);
+    this.pace = rnd(S.pace[0], S.pace[1]) * M.level.paceMul * (del.paceMul || 1);
     this.phase = 'runup'; this.t = 0;
     this.sweep = 0; this.sweepDir = 1;
     Input.flush();
@@ -2238,49 +2356,36 @@ const Bowl = {
     hist.push({ band: band.key, z: this.d.pitchZ });
     if (hist.length > 2) hist.shift();
 
-    // Hostility: pace at the body, a tight corridor, and the batter flinching.
-    let gain = -0.03;                    // it decays if you stop earning it
-    if (del.bouncer) gain += 0.16;
-    if ((band.key === 'short' || band.key === 'bouncer') && Math.abs(this.d.pitchZ) < 0.7) gain += 0.08 * S.hostile;
-    if (Math.abs(this.d.pitchZ - 0.35) < 0.45 && band.key === 'good') {
-      M.bowl.corridor++;
-      gain += 0.03 * Math.min(3, M.bowl.corridor) * S.hostile;
-    } else M.bowl.corridor = 0;
-    if (err < 0.2) gain += 0.03;
-    if (err > 0.7) gain -= 0.06;
-    M.hostility = clamp(M.hostility + gain, 0, 1);
-
     this.prepAI();
     this.phase = 'flight'; this.t = 0;
-    Snd.intensity = M.hostility;
   },
 
-  /* The AI batter. Hostility narrows their window; it does not roll their
-     dismissal. You can see them getting worse. */
+  /* The AI batter. Accuracy narrows his window and movement widens his
+     error; nothing rolls his dismissal. You can see him getting worse. */
   prepAI() {
-    const T = M.tier;
+    const T = M.level;
     const contactT = this.releaseT + this.pred.t;
-    const h = M.hostility;
     let best = 2, bs = -9;
     for (let i = 0; i < 6; i++) {
       const s = shotAppropriate(SHOTS[i], this.pred.y, this.band.key) + rnd(0, 0.25);
       if (s > bs) { bs = s; best = i; }
     }
-    if (Math.random() < h * 0.30) best = (best + (Math.random() < 0.5 ? 1 : 5)) % 6;  // across the line
+    if (Math.random() < 0.10) best = (best + (Math.random() < 0.5 ? 1 : 5)) % 6;  // across the line
     // he plays the line he saw, not the one it ended on: movement is what
     // beats him, and how much moved is exactly how much he is off by.
     const moved = Math.abs(this.d.turn) * 0.055 + Math.abs(this.d.az) * 0.030;
     // A ball released on the beat is harder to pick than one that slipped
     // out: accuracy widens his error, it does not narrow it.
-    const sigma = T.aiSigma * (1 + h * 0.45 + this.surprise * 0.25 + moved)
+    const sigma = T.aiSigma * (1 + this.surprise * 0.25 + moved)
                 * (1.15 - this.tapErr * 0.40);
     const px = this.d.pitchX, pz = this.d.pitchZ;
     this.loose = (Math.abs(pz) > 1.25) || ((px < 13.2 || px > 19.7) && Math.abs(pz) > 0.95);
-    const shy = h > 0.55 && (this.band.key === 'short' || this.band.key === 'bouncer') && Math.random() < h * 0.45;
+    const shy = (this.band.key === 'short' || this.band.key === 'bouncer')
+              && M.batterConf < 0.42 && Math.random() < 0.35;
     this.ai = {
       zone: best, err: randn() * sigma, played: false,
       swingAt: contactT + randn() * sigma,
-      leave: shy || Math.random() < 0.04 + h * 0.06,
+      leave: shy || Math.random() < 0.05,
       contactT: contactT, sigma: sigma,
     };
     this.ai.err = this.ai.swingAt - contactT;
@@ -2288,18 +2393,17 @@ const Bowl = {
   },
 
   playAI() {
-    const T = M.tier;
+    const T = M.level;
     this.ai.played = true;
     this.aiSwingT = now();
     if (this.ai.leave) { Snd.bat('miss'); this.aiSwingT = -9; return; }
     const shot = SHOTS[this.ai.zone];
     const approp = shotAppropriate(shot, this.pred.y, this.band.key);
-    const widen = T.aiWindow * (0.72 + approp * 0.34) * (1 - M.hostility * 0.14)
-                * (this.loose ? 1.3 : 1);
+    const widen = T.aiWindow * (0.72 + approp * 0.34) * (this.loose ? 1.3 : 1);
     const w = timingWindows({ widen: widen });
     const e = Math.abs(this.ai.err);
     const quality = e < w.middle ? 'middle' : e < w.good ? 'good' : e < w.edge ? 'edge' : 'air';
-    if (quality === 'air') { Snd.bat('miss'); M.hostility = clamp(M.hostility + 0.06, 0, 1); return; }
+    if (quality === 'air') { Snd.bat('miss'); M.batterConf = clamp(M.batterConf - 0.05, 0, 1); return; }
     const need = clamp((this.requiredRate() - 7) / 9, 0, 1);
     const aggressive = Math.random() < 0.44 + M.batterConf * 0.34 + (this.loose ? 0.35 : 0) + need * 0.45;
     const type = !aggressive ? 'control' : (Math.random() < need * 0.7 ? 'slog' : 'attack');
@@ -2316,7 +2420,7 @@ const Bowl = {
       for (const f of M.field) near = Math.min(near, Math.hypot(px - f.x, pz - f.z));
       if (near > bestGap) { bestGap = near; aim = a; }
     }
-    const angle = aim + randn() * cone * (1 + M.hostility * 0.5);
+    const angle = aim + randn() * cone;
     const power = CFG.swingSpeed[type] * CFG.qualityMult[quality] * shot.power * approp;
     const lift = shot.lift * CFG.typeLift[type] * CFG.qualityLift[quality]
                + (quality === 'edge' ? rnd(0, 0.45) : 0);
@@ -2353,20 +2457,23 @@ const Bowl = {
         Take.start(keeperOf(M.field), Ball.y, true);
       }
     }
-    if (o.label === 'BEATEN') { M.hostility = clamp(M.hostility + 0.08, 0, 1); M.batterConf = clamp(M.batterConf - 0.06, 0, 1); }
+    if (o.label === 'BEATEN') M.batterConf = clamp(M.batterConf - 0.08, 0, 1);
     if (o.runs > 0 && o.runs < 4) M.batterConf = clamp(M.batterConf + 0.04, 0, 1);
-    if (o.runs >= 4) { M.hostility = clamp(M.hostility - 0.16, 0, 1); M.batterConf = clamp(M.batterConf + 0.12, 0, 1); Snd.sting(o.runs === 6 ? 'six' : 'four'); }
+    if (o.runs >= 4) { M.batterConf = clamp(M.batterConf + 0.12, 0, 1); Snd.sting(o.runs === 6 ? 'six' : 'four'); }
     if (o.wicket) {
-      b.wickets++; M.hostility = clamp(M.hostility + 0.14, 0, 1);
-      M.batterConf = 0.4; Snd.sting('wicket'); Cam.kick(0.7);
-      b.corridor = 0;
+      b.wickets++; M.batterConf = 0.4; Snd.sting('wicket'); Cam.kick(0.7);
     }
     b.runs += o.runs;
+    const bat = M.theirBatter();
+    if (bat) {
+      bat.balls++; bat.runs += o.runs;
+      if (o.wicket) { bat.out = true; bat.how = o.label === 'BOWLED' ? 'b' : 'c'; M.theirOut++; }
+    }
     if (b.balls % 6 === 0) b.variLeft = 2;
     M.say(o.label, o.runs >= 4 || o.wicket);
     this.outcome = o;
     this.phase = 'result'; this.t = 0;
-    Snd.intensity = M.hostility;
+    Snd.intensity = clamp(0.25 + b.wickets * 0.12, 0, 1);
     if (!Chase.on && !Take.on) Cam.home(false);
   },
 
@@ -2384,12 +2491,12 @@ const Bowl = {
    Five overs a side. You face every ball of your innings; if you go early
    the rest is simmed and you are bowling inside ten seconds. */
 const Match = {
-  screen: 'menu', tier: TIERS[0],
-  simTarget: 0, simShown: 0, breakT: 0, note: '', won: false, margin: '',
+  screen: 'menu', level: LEVELS[0],
+  simTarget: 0, simShown: 0, breakT: 0, note: '', won: false, margin: '', boardPlace: -1,
 
-  toGear(tier, mode) {
-    this.tier = tier;
-    M.reset(tier, mode);
+  toGear(level, mode) {
+    this.level = level;
+    M.reset(level, mode);
     this.screen = 'gear';
   },
   begin() {
@@ -2403,9 +2510,23 @@ const Match = {
   endInnings() {
     Chase.stop();
     if (M.mode === 'batPractice') { this.finish(); return; }
-    const rate = M.tier.key === 'club' ? 1.05 : 1.2;
+    const rate = 1.05 + LEVELS.indexOf(M.level) * 0.08;
     const left = Math.max(0, M.bat.overs * 6 - M.bat.balls);
-    M.bat.teamRuns = M.bat.runs + Math.round(left * rate * rnd(0.6, 1.5)) + Math.round(rnd(6, 26));
+    const others = Math.round(left * rate * rnd(0.6, 1.5)) + Math.round(rnd(6, 26));
+    M.bat.teamRuns = M.bat.runs + others;
+    // share the rest of the total out down the order, so the card adds up
+    let pot = others, ballsLeft = Math.max(6, left);
+    const order = [0, 1, 2, 4, 5, 6, 7, 8, 9, 10];
+    order.forEach((i, n) => {
+      if (pot <= 0) return;
+      const take = n === order.length - 1 ? pot : Math.round(pot * rnd(0.15, 0.45));
+      const c = M.myCard[i];
+      c.runs = Math.min(pot, take);
+      c.balls = Math.max(1, Math.round(c.runs * rnd(0.8, 2.0)));
+      c.out = n < 7; c.how = c.out ? 'out' : 'not out';
+      pot -= c.runs;
+      ballsLeft -= c.balls;
+    });
     this.simTarget = M.bat.teamRuns; this.simShown = M.bat.runs;
     this.screen = 'break'; this.breakT = 0;
     Snd.mode = 'bowl'; Snd.intensity = 0;
@@ -2413,7 +2534,7 @@ const Match = {
   startBowling() {
     M.phase = 'bowl';
     M.bowl.target = M.bat.teamRuns + 1;
-    M.field = buildField(M.tier, null);
+    M.field = buildField(M.level, null);
     this.screen = 'match';
     Bowl.nextBall();
     Cam.home(true);
@@ -2428,7 +2549,17 @@ const Match = {
       this.margin = this.won ? (b.teamRuns - w.runs) + ' RUNS' : (w.maxWickets - w.wickets) + ' WICKETS';
     }
     this.note = selectorNote();
-    if (b.runs > Save.data.bestRuns) Save.data.bestRuns = b.runs;
+    this.boardPlace = -1;
+    if (b.balls > 0) {
+      Save.data.board.forEach(e => { e.fresh = false; });
+      const d = new Date();
+      this.boardPlace = Save.record({
+        name: Save.data.player.name || 'YOU', runs: b.runs, balls: b.balls,
+        level: M.level.name, fresh: true,
+        when: d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') +
+              '-' + String(d.getDate()).padStart(2, '0'),
+      });
+    }
     Save.data.played++; Save.data.seen = true; Save.save();
     if (b.runs >= 30 || w.wickets >= 3) Portal.happy();
   },
@@ -2514,13 +2645,17 @@ function powerBand(held, early) {
 }
 
 function drawPowerMeter() {
-  if (M.phase !== 'bat' || Bat.swung) return;
-  if (Bat.phase !== 'runup' && Bat.phase !== 'flight') return;
-  if (!Input.charging()) return;
+  if (M.phase !== 'bat' || Match.screen !== 'match') return;
 
-  const early = Bat.earlyHold;
-  const held = clamp(Input.heldFor(), 0, POWER.max);
-  const band = powerBand(held, early);
+  // It stays on screen whether or not the thumb is down. A meter that only
+  // exists while you are already holding teaches nothing to somebody who has
+  // not worked out that holding is a thing.
+  const live = Input.charging() && !Bat.swung
+            && (Bat.phase === 'runup' || Bat.phase === 'flight');
+  const early = live && Bat.earlyHold;
+  const held = live ? clamp(Input.heldFor(), 0, POWER.max) : 0;
+  const band = live ? powerBand(held, early)
+                    : { name: 'HOLD FOR POWER', col: 'rgba(255,255,255,0.55)', i: 0 };
   const w = 236, h = 16, x = VW / 2 - w / 2, y = VH - 62;
 
   ctx.fillStyle = 'rgba(0,0,0,0.45)';
@@ -2528,7 +2663,7 @@ function drawPowerMeter() {
   ctx.fillStyle = 'rgba(255,255,255,0.14)';
   ctx.fillRect(x, y, w, h);
   ctx.fillStyle = band.col;
-  ctx.fillRect(x, y, w * (early ? 1 : held / POWER.max), h);
+  if (live) ctx.fillRect(x, y, w * (early ? 1 : held / POWER.max), h);
 
   // the two thresholds, drawn where they actually are
   ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 2;
@@ -2641,6 +2776,21 @@ function drawBowlerReaction(mood, shirt) {
    feedback, no mechanical effect, and it is the thing players talk about. */
 const STRIKER_X = CREASE_X + 0.45, STRIKER_Z = -0.72;
 
+/* What your side is wearing, and what theirs is. Yours is the kit you picked
+   on the player screen; theirs is their nation's, unless that would put two
+   near-identical shirts on the same field. */
+function myKit() {
+  const k = kitByKey(Save.data.player.kit);
+  return { shirt: k.shirt, trim: k.trim, pads: k.pads, cap: k.trim,
+           skin: SKINS[clamp(Save.data.player.skin | 0, 0, SKINS.length - 1)] };
+}
+function theirKit() {
+  const n = M.oppo || NATIONS[0];
+  const mine = kitByKey(Save.data.player.kit);
+  const shirt = n.kit === mine.shirt ? '#3b3f45' : n.kit;
+  return { shirt: shirt, trim: '#f2ecdc', pads: '#f2ecdc', cap: n.cap, skin: SKINS[3] };
+}
+
 /* The whole shot, as a pose. Stance and pick-up when he is waiting, then
    the swing runs on its own clock from the moment he commits: down through
    the line, out the far side, and held there. The hold is the point — a
@@ -2749,8 +2899,10 @@ function drawBatBlur(anchors, o) {
    has the off side on the left, so that batter is the same rig mirrored, and
    his cut still goes to the off. */
 function drawStriker() {
+  const K = myKit();
   const o = strikerPose(Bat.zone, Bat.swung ? Bat.swingT : -1, Bat.swingInfo,
-                        PAL.maroon, M.gear === 'cap' ? 'cap' : 'helmet', 1);
+                        K.shirt, M.gear === 'cap' ? 'cap' : 'helmet', 1);
+  o.trim = K.trim; o.padCol = K.pads; o.capCol = K.cap; o.skin = K.skin;
   const x = STRIKER_X - o.stride;        // down the pitch is decreasing x
   Art.shadow(x, STRIKER_Z, 0.44, 0.26);
   drawBatBlur(drawFigure(x, STRIKER_Z, o), o);
@@ -2759,7 +2911,7 @@ function drawStriker() {
 /* The batter you are bowling at, seen from behind your own arm. */
 /* The batter you are bowling at, seen from behind your own arm. He plays
    the same six shots off the same table — you are watching him middle them
-   or not, which is what Hostility is for. */
+   or not. */
 function drawFacingBatter() {
   const fl = Bowl.flinch > 0;
   Art.shadow(STRIKER_X, STRIKER_Z, 0.44, 0.26);
@@ -2770,10 +2922,12 @@ function drawFacingBatter() {
     });
     return;
   }
+  const K = theirKit();
   const played = Bowl.ai && Bowl.ai.played && Bowl.aiSwingT > 0;
   const o = strikerPose(played ? Bowl.ai.zone : 2, played ? Bowl.aiSwingT : -1,
                         played ? { quality: Bowl.aiQuality } : null,
-                        PAL.them, 'helmet', -1);
+                        K.shirt, 'helmet', -1);
+  o.trim = K.trim; o.padCol = K.pads; o.capCol = K.cap; o.skin = K.skin;
   if (!played) o.lean = -0.4 + M.batterConf * 1.2;
   const x = STRIKER_X - o.stride;
   drawBatBlur(drawFigure(x, STRIKER_Z, o), o);
@@ -2803,8 +2957,10 @@ function drawNonStriker(shirt) {
   const back = live ? clamp((M.phase === 'bat' ? Bat.t : Bowl.t) * 1.5, 0, 1) : 0;
   const x = FAR_CREASE_X - 0.3 + back * 1.9;
   Art.shadow(x, NONSTRIKER_Z, 0.4, 0.2);
+  const K = M.phase === 'bat' ? myKit() : theirKit();
   drawFigure(x, NONSTRIKER_Z, {
-    view: 'side', face: 1, shirt: shirt, pads: true, bat: true, cap: 'cap',
+    view: 'side', face: 1, shirt: K.shirt, trim: K.trim, padCol: K.pads,
+    capCol: K.cap, skin: K.skin, pads: true, bat: true, cap: 'cap',
     legF: 15 + back * 16, legB: -15 - back * 4,
     armF: 28, armB: 20, batAng: 22, lean: back * 1.2, scale: 0.98,
   });
@@ -2813,7 +2969,7 @@ function drawNonStriker(shirt) {
 /* One fielder. Standing, chasing, or taking it — and when he is taking it
    his hands go where the ball is, so the catch is a thing that happens
    rather than a caption over a ball still travelling. */
-function drawFielder(p, shirt, labels) {
+function drawFielder(p, shirt, labels, kit) {
   const x = p.chase ? p.cx : p.x, z = p.chase ? p.cz : p.z;
   const g = proj(x, 0, z);
   if (g.behind || g.d < 3.4 || g.x < -260 || g.x > VW + 260) return;
@@ -2870,7 +3026,7 @@ function drawFielder(p, shirt, labels) {
    whoever was written last on top regardless of who was actually nearer. So
    each figure is queued with its own distance from the lens and the queue
    is sorted before anything is drawn. */
-function sceneActors(theirShirt, labels) {
+function sceneActors(theirShirt, labels, fielding) {
   const out = [];
   const add = (x, z, fn) => {
     const p = proj(x, 0, z);
@@ -2888,24 +3044,30 @@ function sceneActors(theirShirt, labels) {
     // this a caught and bowled left the ball hanging in mid-air three metres
     // from a bowler who was standing in his follow-through.
     if (p.bowler && !p.taking && !p.chase) continue;
-    add(fx(p), fz(p), () => drawFielder(p, theirShirt, labels));
+    add(fx(p), fz(p), () => drawFielder(p, theirShirt, labels, fielding));
   }
   add(UMPIRE_X, UMPIRE_Z, drawUmpire);
   return out;
 }
 
 function drawScene() {
-  const T = M.tier;
-  drawGround(T);
-  drawSightscreen(T);
+  const T = M.level;
+  /* Back to front, by how far away each thing actually is: the crowd is
+     beyond the rope at R+7, the sightscreen stands at R+4 and the boards are
+     on the rope itself. Drawing the crowd last put spectators in front of
+     both. */
+  drawGround(T, false);
   drawCrowd(T);
+  drawSightscreen(T);
+  drawBoards(boundaryR());
 
-  const theirShirt = M.phase === 'bat' ? PAL.them : PAL.maroonLite;
-  const ourShirt = M.phase === 'bat' ? PAL.maroon : PAL.them;
+  const fielding = M.phase === 'bat' ? theirKit() : myKit();
+  const theirShirt = fielding.shirt;
+  const ourShirt = (M.phase === 'bat' ? myKit() : theirKit()).shirt;
   const labels = M.showNames && (
     (M.phase === 'bowl' && Bowl.phase === 'setup') ||
     (M.phase === 'bat' && (Bat.phase === 'ready' || Bat.phase === 'runup')));
-  const actors = sceneActors(theirShirt, labels);
+  const actors = sceneActors(theirShirt, labels, fielding);
 
   const atDepth = (x, z, fn) => {
     const p = proj(x, 0, z);
@@ -2949,13 +3111,13 @@ function drawScene() {
       /* he is in the actor list already */
     } else if (Bowl.phase === 'runup') {
       const q = clamp(Bowl.t / 1.6, 0, 1);
-      atDepth(runupX(q, true), BOWLER_Z, () => drawBowlerRunup(q, PAL.maroonLite, M.style, true));
+      atDepth(runupX(q, true), BOWLER_Z, () => drawBowlerRunup(q, fielding.shirt, M.style, true));
     } else if (Bowl.phase === 'flight' || Bowl.phase === 'result') {
-      atDepth(RELEASE_X, BOWLER_Z, () => drawBowlerRunup(1, PAL.maroonLite, M.style, true));
+      atDepth(RELEASE_X, BOWLER_Z, () => drawBowlerRunup(1, fielding.shirt, M.style, true));
     } else {
       // setting your field: he is back at his mark, not standing on a length
       const t = Bowl.t;
-      atDepth(bowlerWaitX(t), BOWLER_Z, () => drawBowlerWaiting(t, PAL.maroonLite));
+      atDepth(bowlerWaitX(t), BOWLER_Z, () => drawBowlerWaiting(t, fielding.shirt));
     }
     actors.sort((a, b) => b.d - a.d);
     actors.forEach(a => a.fn());
@@ -3072,7 +3234,6 @@ function drawHUD() {
       { w: 150, bg: '#12294a', t: w.target ? 'NEED ' + Math.max(0, w.target - w.runs) : 'PRACTICE',
         fg: PAL.white, size: 20 },
     ]);
-    drawMeter(40, 112, 300, 20, M.hostility, 'HOSTILITY', M.hostility >= 0.85);
     Art.text('BATTER', VW - 178, 46, 15, 'rgba(255,255,255,0.75)', 'left');
     ctx.fillStyle = 'rgba(0,0,0,0.40)'; ctx.fillRect(VW - 178, 54, 138, 12);
     ctx.fillStyle = M.batterConf > 0.55 ? '#5fd07a' : M.batterConf > 0.3 ? '#e8b923' : '#d0483f';
@@ -3174,16 +3335,35 @@ function drawBroadcast() {
 
 /* ===================== SCREENS ===================== */
 const UI = { hits: [], rotateDismissed: false };
-function uiBtn(x, y, w, h, label, sub, hot) {
-  UI.hits.push({ x: x, y: y, w: w, h: h, id: label });
+/* Type that fits its box. The old version guessed a size from the character
+   count, which overflowed on anything long — so it measures instead, shrinks
+   until it fits with a margin, and only then draws. */
+function fitText(str, maxW, want, weight) {
+  let size = want;
+  ctx.font = (weight || '900') + ' ' + size + 'px "Arial Black", Impact, sans-serif';
+  let w = ctx.measureText(str).width;
+  if (w > maxW && w > 0) {
+    size = Math.max(9, Math.floor(size * maxW / w));
+    ctx.font = (weight || '900') + ' ' + size + 'px "Arial Black", Impact, sans-serif';
+  }
+  return size;
+}
+
+function uiBtn(x, y, w, h, label, sub, hot, id) {
+  UI.hits.push({ x: x, y: y, w: w, h: h, id: id || label });
   ctx.fillStyle = hot ? PAL.gold : 'rgba(0,0,0,0.45)';
   ctx.fillRect(x, y, w, h);
   ctx.strokeStyle = hot ? PAL.gold : PAL.white; ctx.lineWidth = 3;
   ctx.strokeRect(x, y, w, h);
-  Art.text(label, x + w / 2, y + (sub ? h / 2 : h / 2 + 11), Math.min(30, w / (label.length * 0.62)),
-           hot ? PAL.ink : PAL.white);
-  if (sub) Art.text(sub, x + w / 2, y + h / 2 + 28, 16, hot ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.7)', 'center', '700');
-  return label;
+  const pad = 18;
+  const ls = fitText(label, w - pad * 2, Math.min(28, h * (sub ? 0.40 : 0.52)));
+  Art.text(label, x + w / 2, y + (sub ? h * 0.46 : h / 2 + ls * 0.36), ls, hot ? PAL.ink : PAL.white);
+  if (sub) {
+    const ss = fitText(sub, w - pad * 2, 15, '700');
+    Art.text(sub, x + w / 2, y + h * 0.76, ss,
+             hot ? 'rgba(0,0,0,0.72)' : 'rgba(255,255,255,0.72)', 'center', '700');
+  }
+  return id || label;
 }
 function uiTake() {
   const t = Input.takeTap();
@@ -3201,118 +3381,271 @@ function stripes() {
 
 function drawMenu() {
   stripes();
-  Art.text('GRADE', VW / 2, 150, 96, PAL.gold);
-  Art.text('CRICKET', VW / 2, 238, 96, PAL.white);
-  Art.text('SWAGGER  ·  HOSTILITY  ·  ONE BALL AT A TIME', VW / 2, 276, 20, 'rgba(255,255,255,0.75)');
+  Art.text('GRADE', VW / 2, 128, 84, PAL.gold);
+  Art.text('CRICKET', VW / 2, 202, 84, PAL.white);
+  Art.text('ONE BALL AT A TIME', VW / 2, 234, 18, 'rgba(255,255,255,0.75)');
 
-  uiBtn(VW / 2 - 460, 320, 300, 92, 'QUICK MATCH', '5 overs each · bat then bowl');
-  uiBtn(VW / 2 - 150, 320, 300, 92, 'BATTING', 'endless · learn the fan');
-  uiBtn(VW / 2 + 160, 320, 300, 92, 'BOWLING', 'endless spell · build Hostility');
+  uiBtn(VW / 2 - 330, 266, 300, 84, 'PLAY', '5 overs each · bat then bowl');
+  uiBtn(VW / 2 + 30, 266, 300, 84, 'BATTING', 'endless · learn the fan');
+  uiBtn(VW / 2 - 330, 362, 300, 62, 'BOWLING', 'endless spell');
+  uiBtn(VW / 2 + 30, 362, 300, 62, 'MY PLAYER', Save.data.player.name);
+  uiBtn(VW / 2 - 150, 436, 300, 62, 'LEADERBOARD',
+        Save.best() > 0 ? 'best ' + Save.best() : 'nothing on it yet');
 
-  const t = Match.tier;
-  Art.text('TIER', VW / 2, 458, 20, 'rgba(255,255,255,0.7)');
-  uiBtn(VW / 2 - 230, 472, 220, 58, 'CLUB', null, t === TIERS[0]);
-  uiBtn(VW / 2 + 10, 472, 220, 58, 'ISLAND', null, t === TIERS[1]);
-
-  Art.text(Save.data.bestRuns > 0 ? 'BEST INNINGS: ' + Save.data.bestRuns : 'TAP TO BEGIN',
-    VW / 2, 578, 22, PAL.gold);
+  Art.text('DIFFICULTY', VW / 2, 540, 18, 'rgba(255,255,255,0.7)');
+  LEVELS.forEach((L, i) => {
+    uiBtn(VW / 2 - 340 + i * 232, 554, 216, 56, L.name, null, Match.level === L);
+  });
+  Art.text(Match.level.blurb, VW / 2, 638, 19, PAL.gold, 'center', '700');
   Art.text('BAT: hold anywhere, drag to aim, release on the ball   ·   BOWL: drag a target, tap on the beat',
-    VW / 2, 626, 17, 'rgba(255,255,255,0.7)', 'center', '700');
-  Art.text('KEYS: 1-6 aim  ·  SPACE swing / bowl  ·  ARROWS aim your bowling  ·  V variation  ·  M mute',
-    VW / 2, 654, 15, 'rgba(255,255,255,0.5)', 'center', '700');
+    VW / 2, 676, 15, 'rgba(255,255,255,0.6)', 'center', '700');
 
   const id = uiTake();
-  if (id === 'QUICK MATCH') Match.toGear(Match.tier, 'match');
-  else if (id === 'BATTING') Match.toGear(Match.tier, 'batPractice');
-  else if (id === 'BOWLING') Match.toGear(Match.tier, 'bowlPractice');
-  else if (id === 'CLUB') Match.tier = TIERS[0];
-  else if (id === 'ISLAND') Match.tier = TIERS[1];
+  if (id === 'PLAY') Match.toGear(Match.level, 'match');
+  else if (id === 'BATTING') Match.toGear(Match.level, 'batPractice');
+  else if (id === 'BOWLING') Match.toGear(Match.level, 'bowlPractice');
+  else if (id === 'MY PLAYER') Match.screen = 'player';
+  else if (id === 'LEADERBOARD') Match.screen = 'board';
+  else if (id) { const L = LEVELS.find(v => v.name === id); if (L) Match.level = L; }
 }
 
-/* One screen, two decisions: what is on your head, and what you bowl. */
+/* ===================== MY PLAYER =====================
+   A name, a lid, a skin tone and a kit. Four rows, and the figure beside them
+   is the actual rig drawn with the actual options, so what you pick is what
+   walks out. */
+const NAME_POOL = ['ACE', 'DUKE', 'RAJ', 'SKIP', 'TIGER', 'BOSS', 'KID', 'CHIEF',
+                   'SLIM', 'LEFTY', 'JUNIOR', 'CAPTAIN'];
+
+function drawPlayerScreen() {
+  stripes();
+  const P = Save.data.player;
+  Art.text('MY PLAYER', VW / 2, 84, 52, PAL.white);
+
+  // the man himself, drawn from the same rig the match uses
+  const kit = kitByKey(P.kit);
+  ctx.save();
+  ctx.translate(VW * 0.20, VH * 0.52); ctx.scale(2.6, 2.6);
+  drawFigureSide(0, 0, Object.assign({}, FIG_DEFAULTS, {
+    view: 'side', face: 1, shirt: kit.shirt, trim: kit.trim, padCol: kit.pads,
+    skin: SKINS[P.skin], capCol: kit.trim, pads: true, bat: true,
+    cap: P.cap, legF: 15, legB: -9, armF: 30, armB: 21, batAng: 22,
+    height: 1.82, scale: 1, alpha: 1, crouch: 0.35,
+  }));
+  ctx.restore();
+
+  const x = VW * 0.42, w = VW * 0.50;
+  Art.text('NAME', x, 158, 17, 'rgba(255,255,255,0.7)', 'left');
+  uiBtn(x, 168, w - 150, 56, P.name || 'YOU', null, false, 'NAME');
+  uiBtn(x + w - 138, 168, 138, 56, 'RANDOM', null, false, 'RANDOM');
+
+  Art.text('LID', x, 264, 17, 'rgba(255,255,255,0.7)', 'left');
+  uiBtn(x, 274, 190, 54, 'HELMET', null, P.cap === 'helmet', 'HELMET');
+  uiBtn(x + 200, 274, 190, 54, 'CAP', null, P.cap === 'cap', 'CAP');
+
+  Art.text('SKIN', x, 368, 17, 'rgba(255,255,255,0.7)', 'left');
+  SKINS.forEach((c, i) => {
+    const bx = x + i * 74;
+    UI.hits.push({ x: bx, y: 378, w: 62, h: 54, id: 'SKIN' + i });
+    ctx.fillStyle = c; ctx.fillRect(bx, 378, 62, 54);
+    ctx.strokeStyle = P.skin === i ? PAL.gold : 'rgba(0,0,0,0.5)';
+    ctx.lineWidth = P.skin === i ? 4 : 2;
+    ctx.strokeRect(bx, 378, 62, 54);
+  });
+
+  Art.text('KIT', x, 472, 17, 'rgba(255,255,255,0.7)', 'left');
+  KITS.forEach((k, i) => {
+    const bx = x + i * 118;
+    UI.hits.push({ x: bx, y: 482, w: 106, h: 62, id: 'KIT' + k.key });
+    ctx.fillStyle = k.shirt; ctx.fillRect(bx, 482, 106, 62);
+    ctx.fillStyle = k.trim; ctx.fillRect(bx, 504, 106, 14);
+    ctx.strokeStyle = P.kit === k.key ? PAL.gold : 'rgba(0,0,0,0.5)';
+    ctx.lineWidth = P.kit === k.key ? 4 : 2;
+    ctx.strokeRect(bx, 482, 106, 62);
+    Art.text(k.name, bx + 53, 538, 13, k.key === 'whites' ? PAL.ink : PAL.white, 'center', '700');
+  });
+
+  uiBtn(VW / 2 - 110, VH - 84, 220, 62, 'DONE', null, true);
+
+  const id = uiTake();
+  if (!id) return;
+  if (id === 'DONE') { Save.save(); Match.screen = 'menu'; }
+  else if (id === 'NAME' || id === 'RANDOM') { P.name = pick(NAME_POOL); Save.save(); }
+  else if (id === 'HELMET' || id === 'CAP') { P.cap = id.toLowerCase(); Save.save(); }
+  else if (id.indexOf('SKIN') === 0) { P.skin = +id.slice(4); Save.save(); }
+  else if (id.indexOf('KIT') === 0) { P.kit = id.slice(3); Save.save(); }
+}
+
+/* ===================== LEADERBOARD ===================== */
+function drawBoardScreen() {
+  ctx.fillStyle = PAL.ink; ctx.fillRect(0, 0, VW, VH);
+  Art.text('LEADERBOARD', VW / 2, 82, 48, PAL.gold);
+  Art.text('YOUR TEN BEST INNINGS', VW / 2, 112, 18, 'rgba(255,255,255,0.6)');
+
+  const rows = Save.data.board;
+  if (!rows.length) {
+    Art.text('Nothing on it yet. Go and get some runs.', VW / 2, VH / 2, 24, 'rgba(255,255,255,0.7)', 'center', '700');
+  }
+  rows.forEach((r, i) => {
+    const y = 156 + i * 46;
+    ctx.fillStyle = i % 2 ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.10)';
+    ctx.fillRect(VW / 2 - 400, y, 800, 40);
+    if (r.fresh) { ctx.fillStyle = 'rgba(232,185,35,0.22)'; ctx.fillRect(VW / 2 - 400, y, 800, 40); }
+    const c = r.fresh ? PAL.gold : PAL.white;
+    Art.text(String(i + 1), VW / 2 - 372, y + 28, 20, 'rgba(255,255,255,0.55)');
+    Art.text(r.name, VW / 2 - 340, y + 28, 22, c, 'left');
+    Art.text(r.runs + ' (' + r.balls + ')', VW / 2 + 70, y + 28, 24, c, 'right');
+    Art.text(r.level, VW / 2 + 200, y + 28, 18, 'rgba(255,255,255,0.7)', 'right');
+    Art.text(r.when || '', VW / 2 + 384, y + 28, 17, 'rgba(255,255,255,0.5)', 'right');
+  });
+
+  uiBtn(VW / 2 - 110, VH - 76, 220, 58, 'BACK', null, true);
+  if (uiTake() === 'BACK') Match.screen = 'menu';
+}
+
+/* ===================== BEFORE THE MATCH =====================
+   Two decisions on one screen: what is on your head for the innings, and what
+   you bowl. Both are one tap, and the boxes size their own type now. */
 function drawGear() {
   stripes();
   const batting = M.mode !== 'bowlPractice';
-  Art.text(Match.tier.name, VW / 2, 66, 30, PAL.gold);
+  Art.text(M.level.name + '   ·   ' + M.us.name + ' v ' + M.oppo.name, VW / 2, 58, 26, PAL.gold);
 
   if (batting) {
-    Art.text('CAP OR HELMET', VW / 2, 132, 46, PAL.white);
-    uiBtn(VW / 2 - 340, 156, 320, 128, 'CAP', null, M.gear === 'cap');
-    Art.text('Swagger builds 40% faster.', VW / 2 - 180, 248, 17,
-             M.gear === 'cap' ? 'rgba(0,0,0,0.75)' : 'rgba(255,255,255,0.7)', 'center', '700');
-    Art.text('The short ball is a problem.', VW / 2 - 180, 270, 17,
-             M.gear === 'cap' ? 'rgba(0,0,0,0.75)' : 'rgba(255,255,255,0.7)', 'center', '700');
-    uiBtn(VW / 2 + 20, 156, 320, 128, 'HELMET', null, M.gear === 'helmet');
-    Art.text('Nothing special happens.', VW / 2 + 180, 248, 17,
-             M.gear === 'helmet' ? 'rgba(0,0,0,0.75)' : 'rgba(255,255,255,0.7)', 'center', '700');
-    Art.text('Nothing bad happens either.', VW / 2 + 180, 270, 17,
-             M.gear === 'helmet' ? 'rgba(0,0,0,0.75)' : 'rgba(255,255,255,0.7)', 'center', '700');
+    Art.text('CAP OR HELMET', VW / 2, 112, 38, PAL.white);
+    uiBtn(VW / 2 - 330, 130, 310, 104, 'CAP', 'Swagger builds 40% faster · the short one hurts', M.gear === 'cap');
+    uiBtn(VW / 2 + 20, 130, 310, 104, 'HELMET', 'Nothing special. Nothing bad either.', M.gear === 'helmet');
   }
 
-  const top = batting ? 330 : 190;
-  Art.text('WHAT DO YOU BOWL?', VW / 2, top, 46, PAL.white);
-  const bw = 196, gap = 12, cols = 3;
-  const x0 = VW / 2 - (bw * cols + gap * (cols - 1)) / 2;
-  STYLES.forEach((s, i) => {
+  const top = batting ? 268 : 170;
+  Art.text('WHAT DO YOU BOWL?', VW / 2, top + 30, 38, PAL.white);
+  const bw = 300, gap = 16, cols = 2;
+  const x0 = VW / 2 - (bw * cols + gap) / 2;
+  STYLES.forEach((st, i) => {
     const cx = x0 + (i % cols) * (bw + gap);
-    const cy = top + 26 + Math.floor(i / cols) * 84;
-    uiBtn(cx, cy, bw, 72, s.name, s.stock.label + ' / ' + s.vari.label, M.style === s);
+    const cy = top + 52 + Math.floor(i / cols) * 88;
+    uiBtn(cx, cy, bw, 76, st.name, st.stock.label + ' / ' + st.vari.label, M.style === st);
   });
-  Art.text(M.style.blurb, VW / 2, top + 226, 20, PAL.gold, 'center', '700');
+  Art.text(M.style.blurb, VW / 2, top + 254, 20, PAL.gold, 'center', '700');
 
-  uiBtn(VW / 2 - 150, VH - 92, 300, 68, 'PLAY', null, true);
+  uiBtn(VW / 2 - 150, VH - 74, 300, 58, 'PLAY', null, true);
 
   const id = uiTake();
   if (id === 'CAP') M.gear = 'cap';
   else if (id === 'HELMET') M.gear = 'helmet';
   else if (id === 'PLAY') Match.begin();
-  else if (id) {
-    const s = STYLES.find(v => v.name === id);
-    if (s) M.style = s;
-  }
+  else if (id) { const st = STYLES.find(v => v.name === id); if (st) M.style = st; }
 }
 
+/* The rest of the innings compresses — never a wall of numbers. */
 function drawBreak(dt) {
   Match.breakT += dt;
   Match.simShown = Math.min(Match.simTarget,
     Match.simShown + Math.max(1, (Match.simTarget - M.bat.runs) * dt * 0.9));
   ctx.fillStyle = PAL.ink; ctx.fillRect(0, 0, VW, VH);
-  Art.text('YOUR INNINGS', VW / 2, 130, 30, 'rgba(255,255,255,0.7)');
+  Art.text('YOUR INNINGS', VW / 2, 130, 28, 'rgba(255,255,255,0.7)');
   const b = M.bat;
   Art.text(b.out ? b.runs + ' (' + b.balls + ')  ' + b.howOut : b.runs + ' (' + b.balls + ') NOT OUT',
-    VW / 2, 206, 68, PAL.gold);
-  Art.text(b.fours + ' FOURS   ·   ' + b.sixes + ' SIXES', VW / 2, 248, 22, 'rgba(255,255,255,0.75)');
-  Art.text('THE REST OF THE INNINGS', VW / 2, 336, 26, 'rgba(255,255,255,0.7)');
-  Art.text(Math.round(Match.simShown) + ' ALL OUT', VW / 2, 406, 60, PAL.white);
-  Art.text('YOU OPEN THE BOWLING — ' + M.style.name, VW / 2, 466, 22, PAL.gold);
+    VW / 2, 206, 64, PAL.gold);
+  Art.text(b.fours + ' FOURS   ·   ' + b.sixes + ' SIXES', VW / 2, 246, 21, 'rgba(255,255,255,0.75)');
+  Art.text(M.us.name + ' ALL OUT', VW / 2, 336, 24, 'rgba(255,255,255,0.7)');
+  Art.text(String(Math.round(Match.simShown)), VW / 2, 406, 60, PAL.white);
+  Art.text('YOU OPEN THE BOWLING — ' + M.style.name, VW / 2, 462, 21, PAL.gold);
   if (Match.breakT > 2.0) {
-    uiBtn(VW / 2 - 190, 512, 380, 76, 'TAKE THE BALL', 'defend ' + (Match.simTarget + 1));
+    uiBtn(VW / 2 - 190, 506, 380, 74, 'TAKE THE BALL', 'defend ' + (Match.simTarget + 1));
     if (uiTake() === 'TAKE THE BALL') Match.startBowling();
   }
 }
 
+/* ===================== SCORECARD ===================== */
+function cardRow(c, x, y, w, you) {
+  const col = you ? PAL.gold : PAL.white;
+  Art.text(c.name + (you ? '  *' : ''), x + 12, y + 20, 19, col, 'left');
+  Art.text(c.how === 'dnb' ? '' : c.out ? c.how : 'not out',
+           x + w * 0.52, y + 20, 15, 'rgba(255,255,255,0.55)', 'left');
+  Art.text(c.how === 'dnb' ? '—' : String(c.runs), x + w - 74, y + 20, 20, col, 'right');
+  Art.text(c.how === 'dnb' ? '' : '(' + c.balls + ')', x + w - 12, y + 20, 16,
+           'rgba(255,255,255,0.6)', 'right');
+}
+
+function drawScorecard() {
+  ctx.fillStyle = PAL.ink; ctx.fillRect(0, 0, VW, VH);
+  const b = M.bat, w = M.bowl;
+  Art.text('SCORECARD', VW / 2, 54, 34, PAL.gold);
+
+  const colW = 596, left = VW / 2 - colW - 14, right = VW / 2 + 14;
+  const head = (x, title, score) => {
+    ctx.fillStyle = '#12294a'; ctx.fillRect(x, 74, colW, 42);
+    Art.text(title, x + 12, 102, 21, PAL.white, 'left');
+    Art.text(score, x + colW - 12, 102, 24, PAL.gold, 'right');
+  };
+  head(left, M.us.name, b.teamRuns + ' all out');
+  head(right, M.oppo.name, w.runs + '-' + w.wickets +
+       ' (' + Math.floor(w.balls / 6) + '.' + (w.balls % 6) + ')');
+
+  M.myCard.forEach((c, i) => {
+    const y = 124 + i * 30;
+    if (i % 2) { ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fillRect(left, y, colW, 28); }
+    cardRow(c, left, y, colW, !!c.you);
+  });
+  M.theirCard.forEach((c, i) => {
+    const y = 124 + i * 30;
+    if (i % 2) { ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fillRect(right, y, colW, 28); }
+    cardRow(c, right, y, colW, false);
+  });
+
+  // your own two lines, pulled out
+  ctx.fillStyle = '#1c3f6e'; ctx.fillRect(left, 470, colW * 2 + 28, 56);
+  Art.text('YOU', left + 14, 506, 22, PAL.white, 'left');
+  Art.text('BATTING  ' + (b.balls === 0 ? 'DNB' : b.runs + ' (' + b.balls + ')'),
+           left + 130, 506, 22, PAL.gold, 'left');
+  const ov = Math.floor(w.balls / 6) + (w.balls % 6 ? '.' + (w.balls % 6) : '');
+  Art.text('BOWLING  ' + (w.balls === 0 ? '—' : ov + '-0-' + w.runs + '-' + w.wickets),
+           left + 470, 506, 22, PAL.gold, 'left');
+  Art.text(M.style.name, left + colW * 2 + 14, 506, 18, 'rgba(255,255,255,0.7)', 'right');
+
+  Art.text('THEIR ATTACK', VW / 2, 560, 17, 'rgba(255,255,255,0.6)');
+  M.attack.forEach((a, i) => {
+    const x = left + i * (colW * 2 + 28) / 4;
+    Art.text(a.name, x + 10, 588, 18, PAL.white, 'left');
+    Art.text(a.style.name, x + 10, 606, 14, 'rgba(255,255,255,0.55)', 'left');
+    const aov = Math.floor(a.balls / 6) + (a.balls % 6 ? '.' + (a.balls % 6) : '');
+    Art.text(a.balls ? aov + '-0-' + a.runs + '-' + a.wickets : '—',
+             x + (colW * 2 + 28) / 4 - 20, 596, 19, PAL.gold, 'right');
+  });
+
+  uiBtn(VW / 2 - 320, VH - 66, 300, 54, 'PLAY AGAIN', null, true);
+  uiBtn(VW / 2 + 20, VH - 66, 300, 54, 'MENU');
+  const id = uiTake();
+  if (id === 'PLAY AGAIN') Match.toGear(Match.level, M.mode);
+  else if (id === 'MENU') { Match.screen = 'menu'; Snd.intensity = 0; }
+}
+
+/* The verdict, and whether it made the board. The full card is one tap away
+   and is where the detail lives. */
 function drawResult() {
   ctx.fillStyle = PAL.ink; ctx.fillRect(0, 0, VW, VH);
   const b = M.bat, w = M.bowl;
   let head = 'STUMPS';
   if (M.mode === 'match') head = w.runs > b.teamRuns ? 'BEATEN' : w.runs === b.teamRuns ? 'TIED' : 'WON';
-  Art.text(head, VW / 2, 124, 72, head === 'WON' ? PAL.gold : PAL.white);
+  Art.text(head, VW / 2, 138, 78, head === 'WON' ? PAL.gold : PAL.white);
   if (M.mode === 'match') {
-    Art.text('YOU ' + b.teamRuns + '   ·   THEM ' + w.runs + '-' + w.wickets, VW / 2, 170, 26, 'rgba(255,255,255,0.8)');
+    Art.text(M.us.name + ' ' + b.teamRuns + '   ·   ' + M.oppo.name + ' ' + w.runs + '-' + w.wickets,
+             VW / 2, 186, 24, 'rgba(255,255,255,0.8)');
   }
-  Art.text('BATTING', VW / 2 - 250, 258, 24, 'rgba(255,255,255,0.6)');
-  Art.text(b.balls === 0 ? 'DNB' : b.runs + ' (' + b.balls + ')', VW / 2 - 250, 318, 54, PAL.gold);
-  Art.text(b.fours + 'x4  ' + b.sixes + 'x6', VW / 2 - 250, 352, 20, 'rgba(255,255,255,0.7)');
-  Art.text('BOWLING', VW / 2 + 250, 258, 24, 'rgba(255,255,255,0.6)');
-  const ov = Math.floor(w.balls / 6) + (w.balls % 6 ? '.' + (w.balls % 6) : '');
-  Art.text(w.balls === 0 ? '—' : ov + '-0-' + w.runs + '-' + w.wickets, VW / 2 + 250, 318, 48, PAL.gold);
-  Art.text(M.style.name, VW / 2 + 250, 352, 20, 'rgba(255,255,255,0.7)');
-  Art.text('THE SELECTOR', VW / 2, 424, 20, 'rgba(255,255,255,0.6)');
-  Art.text(Match.note, VW / 2, 460, 24, PAL.white, 'center', '700');
-  uiBtn(VW / 2 - 330, 518, 300, 80, 'PLAY AGAIN', null, true);
-  uiBtn(VW / 2 + 30, 518, 300, 80, 'MENU');
+  Art.text(b.balls === 0 ? 'DNB' : b.runs + ' (' + b.balls + ')', VW / 2, 292, 66, PAL.gold);
+  Art.text(b.fours + 'x4   ' + b.sixes + 'x6', VW / 2, 328, 20, 'rgba(255,255,255,0.7)');
+  if (Match.boardPlace >= 0) {
+    Art.text('NUMBER ' + (Match.boardPlace + 1) + ' ON YOUR BOARD', VW / 2, 372, 26, PAL.gold);
+  }
+  Art.text('THE SELECTOR', VW / 2, 424, 19, 'rgba(255,255,255,0.6)');
+  Art.text(Match.note, VW / 2, 460, 23, PAL.white, 'center', '700');
+
+  uiBtn(VW / 2 - 470, 516, 300, 74, 'SCORECARD', null, true);
+  uiBtn(VW / 2 - 150, 516, 300, 74, 'PLAY AGAIN');
+  uiBtn(VW / 2 + 170, 516, 300, 74, 'MENU');
   const id = uiTake();
-  if (id === 'PLAY AGAIN') Match.toGear(Match.tier, M.mode);
+  if (id === 'SCORECARD') Match.screen = 'card';
+  else if (id === 'PLAY AGAIN') Match.toGear(Match.level, M.mode);
   else if (id === 'MENU') { Match.screen = 'menu'; Snd.intensity = 0; }
 }
 
@@ -3359,9 +3692,12 @@ function frame(ts) {
   UI.hits.length = 0;
 
   if (Match.screen === 'menu') drawMenu();
+  else if (Match.screen === 'player') drawPlayerScreen();
+  else if (Match.screen === 'board') drawBoardScreen();
   else if (Match.screen === 'gear') drawGear();
   else if (Match.screen === 'break') drawBreak(dt);
   else if (Match.screen === 'result') drawResult();
+  else if (Match.screen === 'card') drawScorecard();
   else {
     drawScene();
     if (M.flash > 0) {
@@ -3387,7 +3723,7 @@ function boot() {
   Portal.init();
   Portal.loadStart();
   Input.init(canvas);
-  M.reset(TIERS[0], 'match');
+  M.reset(LEVELS[0], 'match');
   Cam.home(true);
   resize();
   window.addEventListener('resize', resize);

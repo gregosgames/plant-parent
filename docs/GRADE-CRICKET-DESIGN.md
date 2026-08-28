@@ -498,6 +498,60 @@ went through him. He now stands on the other side, two metres clear of the
 arm, and backs up as the ball is released. The umpire had the same problem and
 has moved a step to the leg side of the bowler's stumps.
 
+### What playtesting changed, and what it cost
+
+**Hostility is gone.** It was one of the two pillars in §1–§2, and it was the
+weaker one. Swagger survives because it is a batting power-up you can feel;
+Hostility asked the player to read a meter while doing the one thing that
+already needs their full attention, and its main mechanical job — widening the
+AI batter's error — was doing work that accuracy and ball movement already do
+more honestly. Removing it left the bowling scheme as target, beat, variation,
+and the batter's confidence tick to tell you whether it is working. It also
+un-suppressed the run rate: a spell now goes for 4.5–6.9 an over rather than
+2–3, which is a real five-over game rather than a stranglehold.
+
+**Two tiers became three difficulties.** Village club and island senior were
+career ladder rungs in a slice with no career. EASY / MEDIUM / HARD say the
+same thing to a player who has just arrived, and the three still differ only
+in window widths and distances — pace, waywardness, how long the length marker
+stays up, how fast the field is, and how big the ground is. Measured, the same
+player scores at 220, 151 and 119 across the three.
+
+**Four bowling styles, not six.** Swing and seam were separate styles doing
+almost the same thing; swing folded into FAST as its two variations, and seam
+went. What is left is FAST (out/inswing), MEDIUM PACE (slower ball), FINGER
+SPIN (arm ball) and WRIST SPIN (googly).
+
+### The player, the cast and the card
+
+**Your player** is a name, a lid, a skin tone and a kit, on one screen, with
+the figure beside the controls drawn from the same rig the match uses — so
+what you pick is what walks out. Whites are in, because most of the era this
+game is set in was played in them.
+
+**The cast** is invented. Eleven men a side, an initial and a surname each, out
+of per-nation pools with a nation drawn for each team. They are not parodies of
+particular cricketers: the document's rule about the real players — archetypes
+and never portraits — applies harder to names than it does to batting styles,
+because attaching a recognisable person's name to a fictional player who then
+gets out for a duck is a different act from evoking an era. So the flavour is
+the flavour of Test cricket from the seventies to the twenty-tens, and nobody
+in it is anybody.
+
+**The scorecard** is filled in as the match happens rather than invented at the
+end. Their card advances a batter on every wicket you take; your own line is
+real and the rest of your side is shared out at the innings break so the column
+adds up to the total you are defending. Their attack is four of the same eleven
+you bowled at, taken from the bottom of the order — the first pass drew two
+separate name lists and the card read as though they had brought a second team.
+
+**The leaderboard** keeps your ten best innings, sorted, with the difficulty
+they were made on. It is local: the game is a single file that makes no network
+calls, so an online board needs a server this build does not have. It is stored
+in the shape a server would want, so wiring one up later is a fetch rather than
+a rewrite — which is also the honest first step towards the online two-player
+idea, and that stays parked as agreed.
+
 ### Where this departs from the document
 
 - **The flourish has no dedicated modifier button.** It fires on a full meter
