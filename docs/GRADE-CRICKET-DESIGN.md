@@ -529,14 +529,13 @@ the figure beside the controls drawn from the same rig the match uses — so
 what you pick is what walks out. Whites are in, because most of the era this
 game is set in was played in them.
 
-**The cast** is invented. Eleven men a side, an initial and a surname each, out
-of per-nation pools with a nation drawn for each team. They are not parodies of
-particular cricketers: the document's rule about the real players — archetypes
-and never portraits — applies harder to names than it does to batting styles,
-because attaching a recognisable person's name to a fictional player who then
-gets out for a duck is a different act from evoking an era. So the flavour is
-the flavour of Test cricket from the seventies to the twenty-tens, and nobody
-in it is anybody.
+**The cast** is parody, pushed to recognisable on request. Every name is a
+bent spelling of a famous surname rather than the surname itself — the joke
+only works if you can hear who it is rubbing against, and it only stays a joke
+if it is never actually them. Eleven a side, an initial and a surname each,
+out of per-nation pools with a nation drawn for each team, and at most two men
+in a side share a surname, checked over three hundred cards. Nobody real is in
+it, and the figures a name ends up with are whatever happened in your match.
 
 **The scorecard** is filled in as the match happens rather than invented at the
 end. Their card advances a batter on every wicket you take; your own line is
@@ -551,6 +550,45 @@ calls, so an online board needs a server this build does not have. It is stored
 in the shape a server would want, so wiring one up later is a fetch rather than
 a rewrite — which is also the honest first step towards the online two-player
 idea, and that stays parked as agreed.
+
+### The match as a broadcast
+
+Every match now happens somewhere. A ground drawn from the opposition's own
+nation, a time of day that sets the sky, the grass and how full the boundary
+is, and a caption before the first ball naming the fixture, the ground, the
+light, the format and the difficulty. It costs one screen and four constants,
+and it is the difference between a test harness and a game with a world.
+
+### Two formats, two ways to play
+
+**ONE DAY** is coloured clothing, a ring field and a total to chase. **TEST**
+is whites, a slip cordon and a side in no hurry — the AI's urgency, which
+drives how hard it swings, is scaled down rather than switched off, so a Test
+innings is a different shape rather than a slower one.
+
+**WHOLE TEAM** bats the innings and bowls every over, choosing who takes each
+one off a four-man attack that includes you. **MY PLAYER** is the design's
+original: you bat at your own number and bowl your own spell, and the rest is
+your team-mates'. Your number is a real decision, because it decides the
+situation you walk into — opening is a fresh sheet, coming in at seven is four
+down with the overs going, and at eleven your side may already be past a
+hundred. Every over you do not bowl is simmed with your team-mates' figures
+going on the card like anybody else's.
+
+Season and career stay parked, as agreed, until the ball-by-ball game settles.
+
+### Wickets, and how they read
+
+Bowled takes the stumps out of the ground: three sticks and two bails given a
+shove along the ball's own line and then left to gravity. It was the loudest
+thing in cricket and it was a caption.
+
+Both cards now say how every man went, with the bowler named — `b`, `lbw`,
+`c wk  b`, `c cover  b`, `c & b`, `run out`, `st wk  b` — and both carry an
+extras line, because a card that does not add up is not a card. Verified
+across four full matches at different difficulties, formats and batting
+positions: every column balances against the team total and no dismissal is
+blank.
 
 ### Where this departs from the document
 

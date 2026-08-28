@@ -328,6 +328,63 @@ function castMember(nation, used) {
   return { name: fallback, nation: nation };
 }
 
+/* ===================== THE GROUND YOU ARE AT =====================
+   Every match happens somewhere. A ground with a name, a time of day, a size
+   of crowd and a sky — drawn from the same nation pool the sides come from,
+   so the fixture, the kit, the cast and the light all agree with each other.
+   This is what makes a match feel like a broadcast rather than a test
+   harness: the same eleven stick figures, somewhere in particular. */
+const GROUNDS = {
+  WI:  ['KENSINGTON PARK', 'QUEEN\'S ROAD OVAL', 'BOURDA GARDENS', 'SABINA BAY'],
+  AUS: ['THE HILL', 'YARRA PARK', 'GABBA STREET', 'ADELAIDE DOMAIN'],
+  ENG: ['ST JOHN\'S WOOD', 'KENNINGTON GREEN', 'HEADINGLY ROAD', 'OLD TRAFFORDE'],
+  IND: ['WANKHEDE MAIDAN', 'EDEN PARK GARDENS', 'CHINNASWAMY ROAD', 'FEROZ MAIDAN'],
+  PAK: ['GADDAFFI GROUND', 'NATIONAL STADIUM ROAD', 'PINDI CLUB', 'IQBAL PARK'],
+  NZ:  ['BASIN ROAD', 'EDEN TERRACE', 'HAGLEY GREEN', 'EMBANKMENT OVAL'],
+  SA:  ['NEWLANDS ROAD', 'THE WANDERING CLUB', 'KINGSMEAD PARK', 'ST GEORGE\'S LANE'],
+  SL:  ['PREMADASSA PARK', 'GALLE FORT GROUND', 'SINHALESE CLUB', 'ASGIRIYA HILL'],
+};
+
+/* Light. It is the same ground at a different hour, and it is most of what
+   tells one match from another before a ball is bowled. */
+const LIGHTS = [
+  { key: 'day',   name: 'DAY', sky: '#5fb0dc', skyHi: '#abd9ea', grass: 1.00, crowd: 1.00 },
+  { key: 'after', name: 'AFTERNOON', sky: '#6fb6d0', skyHi: '#d8dfae', grass: 1.04, crowd: 1.10 },
+  { key: 'eve',   name: 'EVENING', sky: '#4a6f9c', skyHi: '#e0a86a', grass: 0.86, crowd: 1.18 },
+  { key: 'grey',  name: 'OVERCAST', sky: '#8fa2ad', skyHi: '#c3cdd2', grass: 0.92, crowd: 0.80 },
+];
+
+function shadeHex(hex, k) {
+  const n = parseInt(hex.slice(1), 16);
+  const f = v => Math.max(0, Math.min(255, Math.round(v * k)));
+  return '#' + [f(n >> 16), f((n >> 8) & 255), f(n & 255)]
+    .map(v => v.toString(16).padStart(2, '0')).join('');
+}
+
+/* ===================== FORMAT =====================
+   Two of them for now. A Test is whites, a red ball, a slip cordon and a
+   side in no hurry; the limited-overs game is coloured clothing, a ring
+   field and a chase. The rest of the ladder — season, career — waits until
+   the ball-by-ball game is settled, which is the right order. */
+const FORMATS = [
+  {
+    key: 'od', name: 'ONE DAY', overs: 5, whites: false,
+    field: 'club', chase: true, aiPatience: 0,
+    blurb: 'Coloured clothing, a ring field, and a total to chase.',
+  },
+  {
+    key: 'test', name: 'TEST', overs: 5, whites: true,
+    field: 'island', chase: false, aiPatience: 0.55,
+    blurb: 'Whites, a red ball and slips. Nobody is in a hurry.',
+  },
+];
+
+/* How you play: as yourself, or as the whole side. */
+const PLAY_AS = [
+  { key: 'player', name: 'MY PLAYER', blurb: 'You bat at your number and bowl your own spell.' },
+  { key: 'team',   name: 'WHOLE TEAM', blurb: 'You bat the innings and bowl every over.' },
+];
+
 /* Skin tones and kit. Both are the player's, both are two taps on one screen,
    and the whites option is there because most of the era this game is set in
    was played in them. */
@@ -469,7 +526,7 @@ const Portal = {
 const Save = {
   key: 'grade-cricket-v2',
   data: {
-    player: { name: 'YOU', cap: 'helmet', skin: 2, kit: 'whites' },
+    player: { name: 'YOU', cap: 'helmet', skin: 2, kit: 'whites', order: 4 },
     board: [],                           // [{ name, runs, balls, level, when }]
     played: 0, seen: false,
   },
@@ -479,7 +536,7 @@ const Save = {
       if (raw) {
         const d = JSON.parse(raw);
         Object.assign(this.data, d);
-        Object.assign(this.data.player, { name: 'YOU', cap: 'helmet', skin: 2, kit: 'whites' }, d.player || {});
+        Object.assign(this.data.player, { name: 'YOU', cap: 'helmet', skin: 2, kit: 'whites', order: 4 }, d.player || {});
         if (!Array.isArray(this.data.board)) this.data.board = [];
       }
     } catch (e) { /* private mode — play on, just don't remember */ }
@@ -1083,9 +1140,10 @@ function fillArcRegion(arc, colour) {
 
 function drawGround(level, withBoards) {
   const hz = horizonY();
+  const L = M.light || LIGHTS[0];
   const sky = ctx.createLinearGradient(0, 0, 0, Math.max(40, hz));
-  sky.addColorStop(0, PAL.skyHi);
-  sky.addColorStop(1, PAL.sky);
+  sky.addColorStop(0, L.skyHi);
+  sky.addColorStop(1, L.sky);
   ctx.fillStyle = sky;
   ctx.fillRect(0, 0, VW, VH);
 
@@ -1095,7 +1153,7 @@ function drawGround(level, withBoards) {
 
   const R = boundaryR();
   const rope = ringArc(R, 128);
-  fillArcRegion(rope, PAL.grass);
+  fillArcRegion(rope, shadeHex(PAL.grass, L.grass));
 
   /* Mown stripes, running the length of the ground so they converge away
      from you down the pitch. This is the single most 1980s thing on the
@@ -1116,11 +1174,11 @@ function drawGround(level, withBoards) {
       const a = proj(far, 0, z0), b = proj(near, 0, z0);
       const c = proj(near, 0, z1), d = proj(far, 0, z1);
       if (a.behind || b.behind || c.behind || d.behind) continue;
-      Art.poly([a, b, c, d], PAL.grassMow);
+      Art.poly([a, b, c, d], shadeHex(PAL.grassMow, L.grass));
     }
     ctx.restore();
   }
-  fillArcRegion(ringArc(R * 0.52, 96), PAL.grassDark);
+  fillArcRegion(ringArc(R * 0.52, 96), shadeHex(PAL.grassDark, L.grass));
 
   if (rope.pts.length > 1) {             // the rope itself
     const a = rope.pts;
@@ -1192,7 +1250,8 @@ function drawSightscreen(level) {
 function drawCrowd(level) {
   // Close and individual at club level; above that a texture whose density
   // is the level readout.
-  const density = level.key === 'easy' ? 110 : level.key === 'medium' ? 190 : 280;
+  const density = Math.round((level.key === 'easy' ? 110 : level.key === 'medium' ? 190 : 280)
+                             * ((M.light || LIGHTS[0]).crowd));
   const R = boundaryR() + 7;
   for (let i = 0; i < density; i++) {
     const a = (i / density) * TAU + 0.13;
@@ -1206,7 +1265,56 @@ function drawCrowd(level) {
   }
 }
 
+/* Bowled, and the stumps go. Three sticks and two bails given a shove in the
+   direction the ball was travelling and then left to gravity — the wicket
+   coming out of the ground is the loudest thing that happens in cricket and
+   it was previously a caption. */
+const Stumps = {
+  on: false, t: 0, bits: null,
+  hit(vz, vx) {
+    this.on = true; this.t = 0;
+    const push = clamp(Math.hypot(vx, vz) * 0.10, 1.6, 5.0);
+    this.bits = [];
+    for (let i = -1; i <= 1; i++) {
+      this.bits.push({ z: i * 0.11, y: 0, h: STUMP_H, spin: rnd(-9, 9), rot: 0,
+                       vz: vz * 0.06 + rnd(-0.7, 0.7), vx: -push * rnd(0.5, 1.0),
+                       vy: rnd(1.4, 3.4) });
+    }
+    for (let i = -1; i <= 1; i += 2) {      // the bails go furthest
+      this.bits.push({ z: i * 0.055, y: STUMP_H, h: 0.11, spin: rnd(-22, 22), rot: 0,
+                       vz: vz * 0.10 + rnd(-1.6, 1.6), vx: -push * rnd(1.0, 1.7),
+                       vy: rnd(2.6, 4.6) });
+    }
+    Cam.kick(0.85);
+  },
+  clear() { this.on = false; this.bits = null; },
+  update(dt) {
+    if (!this.on) return;
+    this.t += dt;
+    this.bits.forEach(b => {
+      b.z += b.vz * dt; b.y += b.vy * dt; b.h = b.h;
+      b.x = (b.x || 0) + b.vx * dt;
+      b.vy -= G * dt; b.rot += b.spin * dt;
+      if (b.y < 0.02) { b.y = 0.02; b.vy = -b.vy * 0.3; b.vx *= 0.6; b.vz *= 0.6; b.spin *= 0.5; }
+    });
+    if (this.t > 2.6) this.clear();
+  },
+  draw(atX) {
+    if (!this.on) return;
+    this.bits.forEach(b => {
+      const p = proj(atX + (b.x || 0), b.y, b.z);
+      if (p.behind) return;
+      const len = b.h * p.s * PPM;
+      const c = Math.cos(b.rot), sn = Math.sin(b.rot);
+      Art.line({ x: p.x - sn * len / 2, y: p.y - c * len / 2 },
+               { x: p.x + sn * len / 2, y: p.y + c * len / 2 },
+               clamp(3.4 * p.s, 1.3, 14), PAL.white);
+    });
+  },
+};
+
 function drawStumps(x, isStriker) {
+  if (isStriker && Stumps.on) { Stumps.draw(x); return; }
   const w = 0.11;
   for (let i = -1; i <= 1; i++) {
     const base = proj(x, 0, i * w), top = proj(x, STUMP_H, i * w);
@@ -1373,7 +1481,7 @@ function placeFielder(key, level, R) {
 
 function buildField(level, dossier) {
   const R = level.boundary;
-  const names = level.field.slice();
+  const names = (M.format && FIELDS[M.format.field] ? FIELDS[M.format.field] : level.field).slice();
   let flagged = null;
 
   if (level.dossier && dossier) {
@@ -1906,7 +2014,8 @@ function screenFromAim(ang) {
 /* ===================== MATCH STATE ===================== */
 const M = {
   level: LEVELS[0], mode: 'match', phase: 'bat',
-  gear: 'helmet', style: STYLES[0],
+  gear: 'helmet', style: STYLES[0], format: FORMATS[0], playAs: PLAY_AS[0],
+  bowlerAs: null, myOrder: 4,
   swagger: 0,
   dossier: [0, 0, 0, 0, 0, 0],
   bat: null, bowl: null, field: null, attack: null,
@@ -1919,21 +2028,31 @@ const M = {
   reset(level, mode) {
     this.level = level; this.mode = mode;
     this.phase = mode === 'bowlPractice' ? 'bowl' : 'bat';
+    this.myOrder = clamp(Save.data.player.order | 0, 1, 11);
+    if (this.format.whites) this.gear = this.gear;   // whites do not change the lid
     this.swagger = 0;
     this.dossier = [0, 0, 0, 0, 0, 0];
     this.bowlerMood = 0; this.batterConf = 0.5;
-    // who you are playing, and who you are playing for
+    // who you are playing, who you are playing for, and where
     this.oppo = pick(NATIONS);
     this.us = pick(NATIONS.filter(n => n !== this.oppo));
+    this.ground = pick(GROUNDS[this.oppo.code]);
+    this.light = pick(LIGHTS);
     this.bat = {
       runs: 0, balls: 0, fours: 0, sixes: 0, out: false, howOut: '',
       overs: mode === 'batPractice' ? 99 : 5, teamRuns: 0, extras: 0,
-      dots: 0,
+      before: 0, wktsBefore: 0, dots: 0,
     };
     this.bowl = {
       overs: mode === 'bowlPractice' ? 99 : 5, balls: 0, runs: 0, wickets: 0,
       maxWickets: 10, variLeft: 2, lastBands: [], target: 0, extras: 0,
     };
+    this.bat.before = this.batBeforeRuns;
+    this.bat.wktsBefore = this.batBefore;
+    if (this.playAs.key === 'player' && mode === 'match') {
+      // the overs left when you get there
+      this.bat.overs = Math.max(1, 5 - Math.floor((this.myOrder - 1) * 0.34));
+    }
     this.field = buildField(level, null);
 
     // their eleven, and yours. You bat four; the rest of your side is simmed
@@ -1959,8 +2078,31 @@ const M = {
       const m = castMember(this.us, mine);
       this.myCard.push({ name: m.name, runs: 0, balls: 0, out: false, how: 'dnb' });
     }
-    this.myCard[3] = { name: Save.data.player.name || 'YOU', you: true,
-                       runs: 0, balls: 0, out: false, how: 'not out' };
+    /* Where your number puts you. Opening is a fresh sheet; coming in at
+       seven is four down with the overs going. In WHOLE TEAM you bat the
+       whole innings, so none of this applies. */
+    this.mySlot = this.myOrder - 1;
+    const solo = this.playAs.key === 'player' && mode === 'match';
+    const gone = solo ? this.myOrder - 1 : 0;
+    this.batBefore = gone;
+    this.batBeforeRuns = solo ? Math.round(gone * rnd(5, 16)) : 0;
+    this.myCard[this.mySlot] = { name: Save.data.player.name || 'YOU', you: true,
+                                 runs: 0, balls: 0, out: false, how: 'not out' };
+
+    // Your side's attack: you, and three team-mates who can bowl. In WHOLE
+    // TEAM you choose which of them takes each over; as MY PLAYER you bowl
+    // your own spell and the rest is theirs.
+    this.myAttack = [{ name: Save.data.player.name || 'YOU', you: true,
+                       style: this.style, balls: 0, runs: 0, wickets: 0 }];
+    ['fast', 'medium', 'finger', 'wrist']
+      .filter(k => k !== this.style.key).slice(0, 3)
+      .forEach((k, i) => {
+        this.myAttack.push({ name: this.myCard[10 - i].name, style: styleByKey(k),
+                             balls: 0, runs: 0, wickets: 0 });
+      });
+    this.bowlerAs = this.myAttack[0];
+
+
 
     this.msg = ''; this.msgT = 0;
     Chase.stop(); Take.stop(); Catcher.clear();
@@ -1995,7 +2137,7 @@ const Bat = {
     this.outcome = null; this.ghost = null; this.flourish = false;
     this.earlyHold = false; this.backlift = 0; this.swingT = -9;
     this.marker = null; this.pastStumps = null;
-    Chase.stop(); Take.stop(); Catcher.clear();
+    Chase.stop(); Take.stop(); Catcher.clear(); Stumps.clear();
     Input.flush();
 
     this.bowler = M.bowlerNow();
@@ -2172,8 +2314,9 @@ const Bat = {
     const o = { wicket: false, runs: 0, label: '', how: '', wide: r.type === 'wide' };
 
     if (r.type === 'wide') {
-      // a wide is an extra and it does not count as a ball faced
-      b.extras++; b.runs += 1;
+      // A wide is an extra: it goes to the side, not to the man on strike,
+      // and it does not count as a ball faced either.
+      b.extras++;
       o.label = 'WIDE';
       Take.start(keeperOf(M.field), Ball.y, true);
       M.say('WIDE', false);
@@ -2187,7 +2330,7 @@ const Bat = {
     if (r.type === 'caught') {
       o.wicket = true;
       o.label = r.by.keeper ? 'CAUGHT BEHIND' : 'CAUGHT';
-      o.how = r.by.keeper ? 'c wk' : 'c ' + r.by.name.toLowerCase();
+      o.how = r.by.keeper ? 'c wk' : r.by.bowler ? 'c & b' : 'c ' + r.by.name.toLowerCase();
       Take.start(r.by, Ball.y);
       Cam.chase(Take.x, 1.5, Take.z);
     } else if (r.type === 'six') {
@@ -2201,7 +2344,11 @@ const Bat = {
     } else if (r.type === 'through') {
       const ps = this.pastStumps || { z: Ball.z, y: this.pred.y };
       const hit = Math.abs(ps.z) < STUMP_HALF_W + 0.05 && ps.y < STUMP_H + 0.06;
-      if (hit) { o.wicket = true; o.label = 'BOWLED'; o.how = 'b'; }
+      if (hit) {
+        o.wicket = true; o.label = 'BOWLED';
+        o.how = 'b ' + (this.bowler ? this.bowler.name : '');
+        Stumps.hit(Ball.vz, Ball.vx);
+      }
       else if (ps.y < STUMP_H && Math.abs(this.pred.z) < 0.16 && this.swingInfo
                && this.swingInfo.quality === 'miss' && this.zone >= 3 && Math.random() < 0.45) {
         o.wicket = true; o.label = 'LBW'; o.how = 'lbw';
@@ -2222,7 +2369,7 @@ const Bat = {
     const b = M.bat;
     if (o.wicket) {
       b.out = true; b.howOut = o.how;
-      const mine = M.myCard[3];
+      const mine = M.myCard[M.mySlot];
       mine.balls = b.balls; mine.out = true; mine.how = o.how;
       M.swagger = 0;                     // it drops out the ball you get out
       // A golden duck is out first ball. Any other nought is just a duck,
@@ -2235,7 +2382,7 @@ const Bat = {
       return;
     }
     b.runs += o.runs;
-    const me = M.myCard[3];
+    const me = M.myCard[M.mySlot];
     me.runs = b.runs; me.balls = b.balls;
     // Swagger builds on dominant strokeplay only — boundaries, and attacking
     // shots played to good balls. Milked singles build nothing.
@@ -2291,7 +2438,7 @@ const Bowl = {
     this.sweep = 0; this.sweepDir = 1; this.aiSwingT = -9; this.pastStumps = null;
     this.aiConnected = false;
     Ball.live = false;
-    Chase.stop(); Take.stop(); Catcher.clear();
+    Chase.stop(); Take.stop(); Catcher.clear(); Stumps.clear();
     Input.flush();
     Cam.home(false);
     Snd.mode = 'bowl';
@@ -2304,6 +2451,7 @@ const Bowl = {
      defending a small one. */
   requiredRate() {
     const b = M.bowl;
+    if (!M.format.chase) return 4.5;     // a Test side is not chasing anything
     if (!b.target) return 7.5;
     const left = Math.max(1, b.overs * 6 - b.balls);
     return Math.max(0, (b.target - b.runs)) / left * 6;
@@ -2493,8 +2641,9 @@ const Bowl = {
     const widen = T.aiWindow * (0.72 + approp * 0.34) * (this.loose ? 1.3 : 1);
     const w = timingWindows({ widen: widen });
     // how hard he is going at it, which decides how far he can stretch
-    const need = clamp((this.requiredRate() - 7) / 9, 0, 1);
-    const aggressive = Math.random() < 0.44 + M.batterConf * 0.34 + (this.loose ? 0.35 : 0) + need * 0.45;
+    const need = clamp((this.requiredRate() - 7) / 9, 0, 1) * (1 - (M.format.aiPatience || 0));
+    const aggressive = Math.random() < (0.44 - (M.format.aiPatience || 0) * 0.22)
+                     + M.batterConf * 0.34 + (this.loose ? 0.35 : 0) + need * 0.45;
     const type = !aggressive ? 'control' : (Math.random() < need * 0.7 ? 'slog' : 'attack');
 
     const e = Math.abs(this.ai.err);
@@ -2537,6 +2686,8 @@ const Bowl = {
 
     if (r.type === 'wide') {
       b.runs += 1; b.extras++;
+      const w2 = youAs();
+      if (w2.runs !== undefined) w2.runs += 1;
       o.label = 'WIDE';
       Take.start(keeperOf(M.field), Ball.y, true);
       M.say('WIDE', false);
@@ -2560,7 +2711,7 @@ const Bowl = {
     } else {
       const ps = this.pastStumps || { z: Ball.z, y: this.pred.y };
       const hit = Math.abs(ps.z) < STUMP_HALF_W + 0.05 && ps.y < STUMP_H + 0.06;
-      if (hit) { o.wicket = true; o.label = 'BOWLED'; }
+      if (hit) { o.wicket = true; o.label = 'BOWLED'; Stumps.hit(Ball.vz, Ball.vx); }
       else {
         o.label = this.ai.leave ? 'LEFT' : 'BEATEN';
         Take.start(keeperOf(M.field), Ball.y, true);
@@ -2573,10 +2724,19 @@ const Bowl = {
       b.wickets++; M.batterConf = 0.4; Snd.sting('wicket'); Cam.kick(0.7);
     }
     b.runs += o.runs;
+    const me = youAs();
+    if (me.balls !== undefined) { me.balls++; me.runs += o.runs; if (o.wicket) me.wickets++; }
     const bat = M.theirBatter();
     if (bat) {
       bat.balls++; bat.runs += o.runs;
-      if (o.wicket) { bat.out = true; bat.how = o.label === 'BOWLED' ? 'b' : 'c'; M.theirOut++; }
+      if (o.wicket) {
+        bat.out = true;
+        bat.how = o.label === 'BOWLED' ? 'b ' + youAs().name
+                : o.label === 'CAUGHT BEHIND' ? 'c wk  b ' + youAs().name
+                : Take.who && Take.who.bowler ? 'c & b ' + youAs().name
+                : 'c ' + (Take.who ? Take.who.name.toLowerCase() : 'field') + '  b ' + youAs().name;
+        M.theirOut++;
+      }
     }
     if (b.balls % 6 === 0) b.variLeft = 2;
     M.say(o.label, o.runs >= 4 || o.wicket);
@@ -2591,8 +2751,16 @@ const Bowl = {
     const done = (M.mode !== 'bowlPractice')
       && (b.balls >= b.overs * 6 || b.wickets >= b.maxWickets
           || (b.target > 0 && b.runs >= b.target));
-    if (done) Match.finish();
-    else this.nextBall();
+    if (done) { Match.finish(); return; }
+    // an over is up: who takes the next one is a decision, not a rotation
+    if (b.balls > 0 && b.balls % 6 === 0 && M.mode === 'match'
+        && M.playAs.key === 'team') { Match.screen = 'overs'; return; }
+    if (b.balls > 0 && b.balls % 6 === 0 && M.playAs.key === 'player') {
+      // your spell is two of the five; the rest is your team-mates' and is simmed
+      const oversBowled = b.balls / 6;
+      if (oversBowled >= 2) { Match.simRestOfSpell(); return; }
+    }
+    this.nextBall();
   },
 };
 
@@ -2601,7 +2769,7 @@ const Bowl = {
    the rest is simmed and you are bowling inside ten seconds. */
 const Match = {
   screen: 'menu', level: LEVELS[0],
-  simTarget: 0, simShown: 0, breakT: 0, note: '', won: false, margin: '', boardPlace: -1,
+  simTarget: 0, simShown: 0, breakT: 0, introT: 0, note: '', won: false, margin: '', boardPlace: -1,
 
   toGear(level, mode) {
     this.level = level;
@@ -2609,6 +2777,10 @@ const Match = {
     this.screen = 'gear';
   },
   begin() {
+    this.screen = 'intro'; this.introT = 0;
+  },
+  /* The caption that opens a broadcast: who, where, and in what light. */
+  reallyBegin() {
     this.screen = 'match';
     Snd.intensity = 0;
     Portal.playStart();
@@ -2622,19 +2794,20 @@ const Match = {
     const rate = 1.05 + LEVELS.indexOf(M.level) * 0.08;
     const left = Math.max(0, M.bat.overs * 6 - M.bat.balls);
     const others = Math.round(left * rate * rnd(0.6, 1.5)) + Math.round(rnd(6, 26));
-    M.bat.teamRuns = M.bat.runs + others;
+    M.bat.teamRuns = M.bat.runs + M.bat.before + M.bat.extras + others;
     // share the rest of the total out down the order, so the card adds up
-    let pot = others, ballsLeft = Math.max(6, left);
-    const order = [0, 1, 2, 4, 5, 6, 7, 8, 9, 10];
+    let pot = others + M.bat.before;
+    const order = [];
+    for (let i = 0; i < 11; i++) if (i !== M.mySlot) order.push(i);
     order.forEach((i, n) => {
       if (pot <= 0) return;
       const take = n === order.length - 1 ? pot : Math.round(pot * rnd(0.15, 0.45));
       const c = M.myCard[i];
       c.runs = Math.min(pot, take);
       c.balls = Math.max(1, Math.round(c.runs * rnd(0.8, 2.0)));
-      c.out = n < 7; c.how = c.out ? 'out' : 'not out';
+      c.out = i < M.mySlot || n < 7;   // everyone above you is already out
+      c.how = c.out ? pick(HOW_OUT)(M.attack) : 'not out';
       pot -= c.runs;
-      ballsLeft -= c.balls;
     });
     this.simTarget = M.bat.teamRuns; this.simShown = M.bat.runs;
     this.screen = 'break'; this.breakT = 0;
@@ -2672,6 +2845,49 @@ const Match = {
     Save.data.played++; Save.data.seen = true; Save.save();
     if (b.runs >= 30 || w.wickets >= 3) Portal.happy();
   },
+};
+
+/* How the rest of your side went. Their bowlers actually took the wickets, so
+   the card names them. */
+const HOW_OUT = [
+  a => 'b ' + pick(a).name,
+  a => 'lbw  b ' + pick(a).name,
+  a => 'c wk  b ' + pick(a).name,
+  a => 'c ' + pick(['slip', 'cover', 'mid off', 'midwicket', 'point', 'gully',
+                    'square leg', 'long on', 'third man']) + '  b ' + pick(a).name,
+  a => 'run out',
+  a => 'st wk  b ' + pick(a.filter(b => isSpin(b.style)).concat(a)).name,
+];
+
+/* Whichever of your side you are bowling as. */
+function youAs() { return M.bowlerAs || { name: Save.data.player.name || 'YOU' }; }
+
+/* The overs you do not bowl yourself. Your team-mates get through them at
+   their own rate, and their figures go on the card like anybody's. */
+Match.simRestOfSpell = function () {
+  const b = M.bowl;
+  while (b.balls < b.overs * 6 && b.wickets < b.maxWickets
+         && !(b.target > 0 && b.runs >= b.target)) {
+    const man = M.myAttack[1 + ((b.balls / 6) | 0) % (M.myAttack.length - 1)];
+    for (let i = 0; i < 6 && b.balls < b.overs * 6; i++) {
+      const r = Math.random();
+      const runs = r < 0.34 ? 0 : r < 0.62 ? 1 : r < 0.76 ? 2 : r < 0.92 ? 4 : 6;
+      const wicket = Math.random() < 0.045;
+      b.balls++; b.runs += runs;
+      man.balls++; man.runs += runs;
+      const bat = M.theirBatter();
+      if (bat) {
+        bat.balls++; bat.runs += runs;
+        if (wicket) {
+          bat.out = true;
+          bat.how = 'b ' + man.name;
+          M.theirOut++; b.wickets++; man.wickets++;
+        }
+      }
+      if (b.wickets >= b.maxWickets) break;
+    }
+  }
+  Match.finish();
 };
 
 function selectorNote() {
@@ -2889,12 +3105,15 @@ const STRIKER_X = CREASE_X + 0.45, STRIKER_Z = -0.72;
    on the player screen; theirs is their nation's, unless that would put two
    near-identical shirts on the same field. */
 function myKit() {
-  const k = kitByKey(Save.data.player.kit);
+  const k = M.format && M.format.whites ? kitByKey('whites') : kitByKey(Save.data.player.kit);
   return { shirt: k.shirt, trim: k.trim, pads: k.pads, cap: k.trim,
            skin: SKINS[clamp(Save.data.player.skin | 0, 0, SKINS.length - 1)] };
 }
 function theirKit() {
   const n = M.oppo || NATIONS[0];
+  if (M.format && M.format.whites) {
+    return { shirt: '#e7e1cf', trim: n.cap, pads: '#f6f2e6', cap: n.cap, skin: SKINS[3] };
+  }
   const mine = kitByKey(Save.data.player.kit);
   const shirt = n.kit === mine.shirt ? '#3b3f45' : n.kit;
   return { shirt: shirt, trim: '#f2ecdc', pads: '#f2ecdc', cap: n.cap, skin: SKINS[3] };
@@ -3315,7 +3534,9 @@ function drawHUD() {
     drawScorebar([
       { w: 26, bg: PAL.gold, t: '', fg: PAL.ink },
       { w: 150, bg: '#1c3f6e', t: M.gear === 'cap' ? 'CAP' : 'HELMET', fg: PAL.white, size: 22, align: 'left' },
-      { w: 170, bg: '#12294a', t: b.runs + ' (' + b.balls + ')', fg: PAL.gold, size: 32 },
+      { w: 190, bg: '#12294a',
+        t: (b.before + b.runs + b.extras) + '-' + b.wktsBefore + '   ' + b.runs + '(' + b.balls + ')',
+        fg: PAL.gold, size: 22 },
       { w: 130, bg: '#1c3f6e', t: ov + (M.mode === 'batPractice' ? '' : '/' + b.overs) + ' OV', fg: PAL.white, size: 22 },
       { w: 120, bg: '#12294a', t: b.fours + 'x4  ' + b.sixes + 'x6', fg: PAL.white, size: 20 },
     ]);
@@ -3501,13 +3722,20 @@ function drawMenu() {
   uiBtn(VW / 2 - 150, 436, 300, 62, 'LEADERBOARD',
         Save.best() > 0 ? 'best ' + Save.best() : 'nothing on it yet');
 
-  Art.text('DIFFICULTY', VW / 2, 540, 18, 'rgba(255,255,255,0.7)');
+  Art.text('DIFFICULTY', VW / 2 - 360, 528, 16, 'rgba(255,255,255,0.7)');
   LEVELS.forEach((L, i) => {
-    uiBtn(VW / 2 - 340 + i * 232, 554, 216, 56, L.name, null, Match.level === L);
+    uiBtn(VW / 2 - 470 + i * 152, 538, 144, 48, L.name, null, Match.level === L);
   });
-  Art.text(Match.level.blurb, VW / 2, 638, 19, PAL.gold, 'center', '700');
-  Art.text('BAT: hold anywhere, drag to aim, release on the ball   ·   BOWL: drag a target, tap on the beat',
-    VW / 2, 676, 15, 'rgba(255,255,255,0.6)', 'center', '700');
+  Art.text('FORMAT', VW / 2 + 60, 528, 16, 'rgba(255,255,255,0.7)');
+  FORMATS.forEach((F, i) => {
+    uiBtn(VW / 2 + 20 + i * 152, 538, 144, 48, F.name, null, M.format === F, 'FMT' + F.key);
+  });
+  Art.text('PLAY AS', VW / 2 - 360, 606, 16, 'rgba(255,255,255,0.7)');
+  PLAY_AS.forEach((A, i) => {
+    uiBtn(VW / 2 - 470 + i * 232, 616, 224, 48, A.name, null, M.playAs === A, 'AS' + A.key);
+  });
+  Art.text(M.playAs.blurb, VW / 2 + 130, 646, 17, PAL.gold, 'center', '700');
+  Art.text(M.format.blurb, VW / 2 + 130, 592, 16, 'rgba(255,255,255,0.7)', 'center', '700');
 
   const id = uiTake();
   if (id === 'PLAY') Match.toGear(Match.level, 'match');
@@ -3515,6 +3743,8 @@ function drawMenu() {
   else if (id === 'BOWLING') Match.toGear(Match.level, 'bowlPractice');
   else if (id === 'MY PLAYER') Match.screen = 'player';
   else if (id === 'LEADERBOARD') Match.screen = 'board';
+  else if (id && id.indexOf('FMT') === 0) M.format = FORMATS.find(f => f.key === id.slice(3));
+  else if (id && id.indexOf('AS') === 0) M.playAs = PLAY_AS.find(a => a.key === id.slice(2));
   else if (id) { const L = LEVELS.find(v => v.name === id); if (L) Match.level = L; }
 }
 
@@ -3573,7 +3803,22 @@ function drawPlayerScreen() {
     Art.text(k.name, bx + 53, 538, 13, k.key === 'whites' ? PAL.ink : PAL.white, 'center', '700');
   });
 
-  uiBtn(VW / 2 - 110, VH - 84, 220, 62, 'DONE', null, true);
+  Art.text('YOU BAT AT', x, 566, 17, 'rgba(255,255,255,0.7)', 'left');
+  for (let i = 1; i <= 11; i++) {
+    const bx = x + (i - 1) * 58;
+    UI.hits.push({ x: bx, y: 576, w: 50, h: 46, id: 'ORD' + i });
+    ctx.fillStyle = P.order === i ? PAL.gold : 'rgba(0,0,0,0.45)';
+    ctx.fillRect(bx, 576, 50, 46);
+    ctx.strokeStyle = P.order === i ? PAL.gold : 'rgba(255,255,255,0.6)';
+    ctx.lineWidth = 2; ctx.strokeRect(bx, 576, 50, 46);
+    Art.text(String(i), bx + 25, 607, 20, P.order === i ? PAL.ink : PAL.white);
+  }
+  Art.text(P.order <= 3 ? 'Top order. You face the new ball.'
+         : P.order <= 6 ? 'Middle order. You come in with a game on.'
+         : 'Down the order. Some days you will not bat at all.',
+    x, 646, 17, PAL.gold, 'left', '700');
+
+  uiBtn(VW / 2 - 110, VH - 66, 220, 52, 'DONE', null, true);
 
   const id = uiTake();
   if (!id) return;
@@ -3582,6 +3827,7 @@ function drawPlayerScreen() {
   else if (id === 'HELMET' || id === 'CAP') { P.cap = id.toLowerCase(); Save.save(); }
   else if (id.indexOf('SKIN') === 0) { P.skin = +id.slice(4); Save.save(); }
   else if (id.indexOf('KIT') === 0) { P.kit = id.slice(3); Save.save(); }
+  else if (id.indexOf('ORD') === 0) { P.order = +id.slice(3); Save.save(); }
 }
 
 /* ===================== LEADERBOARD ===================== */
@@ -3668,12 +3914,72 @@ function drawBreak(dt) {
   }
 }
 
+/* ===================== THE OPENING CAPTION =====================
+   Three seconds of somewhere in particular before the first ball. */
+function drawIntro(dt) {
+  Match.introT += dt;
+  drawScene();
+  const a = clamp(Match.introT / 0.4, 0, 1) * clamp((2.6 - Match.introT) / 0.4, 0, 1);
+  ctx.globalAlpha = a * 0.55;
+  ctx.fillStyle = '#0a0d14'; ctx.fillRect(0, 0, VW, VH);
+  ctx.globalAlpha = a;
+  const y = VH * 0.34;
+  ctx.fillStyle = '#12294a'; ctx.fillRect(VW / 2 - 330, y, 660, 132);
+  ctx.fillStyle = PAL.gold; ctx.fillRect(VW / 2 - 330, y, 14, 132);
+  Art.text(M.us.name + '  v  ' + M.oppo.name, VW / 2 + 8, y + 50, 34, PAL.white);
+  Art.text(M.ground, VW / 2 + 8, y + 88, 24, PAL.gold);
+  Art.text(M.light.name + '   ·   ' + M.format.name + '   ·   ' + M.level.name,
+           VW / 2 + 8, y + 116, 18, 'rgba(255,255,255,0.75)');
+  ctx.globalAlpha = 1;
+  drawBroadcast();
+  if (Match.introT > 2.6 || Input.takeTap()) Match.reallyBegin();
+}
+
+/* ===================== WHO BOWLS THE NEXT OVER ===================== */
+function drawOversScreen() {
+  drawScene();
+  ctx.fillStyle = 'rgba(8,10,16,0.78)'; ctx.fillRect(0, 0, VW, VH);
+  const w = M.bowl;
+  Art.text('END OF THE OVER', VW / 2, 108, 44, PAL.white);
+  Art.text(w.runs + '-' + w.wickets + '   ·   ' + (w.balls / 6) + ' of ' + w.overs + ' overs' +
+           (w.target ? '   ·   they need ' + Math.max(0, w.target - w.runs) : ''),
+           VW / 2, 148, 22, PAL.gold);
+  Art.text('WHO TAKES THE NEXT ONE?', VW / 2, 208, 26, 'rgba(255,255,255,0.75)');
+
+  M.myAttack.forEach((m, i) => {
+    const x = VW / 2 - 500 + i * 254;
+    const ov = Math.floor(m.balls / 6) + (m.balls % 6 ? '.' + (m.balls % 6) : '');
+    uiBtn(x, 236, 234, 110, m.name + (m.you ? '  *' : ''),
+          m.style.name, M.bowlerAs === m, 'BOWL' + i);
+    Art.text(m.balls ? ov + '-0-' + m.runs + '-' + m.wickets : 'not bowled yet',
+             x + 117, 372, 17, 'rgba(255,255,255,0.7)');
+  });
+
+  Art.text(M.bowlerAs ? M.bowlerAs.style.blurb : '', VW / 2, 424, 20, PAL.gold, 'center', '700');
+  uiBtn(VW / 2 - 150, 470, 300, 62, 'BOWL', null, true, 'GO');
+
+  const id = uiTake();
+  if (!id) return;
+  if (id === 'GO') {
+    M.style = M.bowlerAs.style;
+    Match.screen = 'match';
+    Bowl.nextBall();
+  } else if (id.indexOf('BOWL') === 0) {
+    M.bowlerAs = M.myAttack[+id.slice(4)];
+  }
+}
+
 /* ===================== SCORECARD ===================== */
 function cardRow(c, x, y, w, you) {
   const col = you ? PAL.gold : PAL.white;
-  Art.text(c.name + (you ? '  *' : ''), x + 12, y + 20, 19, col, 'left');
-  Art.text(c.how === 'dnb' ? '' : c.out ? c.how : 'not out',
-           x + w * 0.52, y + 20, 15, 'rgba(255,255,255,0.55)', 'left');
+  const nameW = w * 0.36;
+  const ns = fitText(c.name + (you ? '  *' : ''), nameW, 19);
+  Art.text(c.name + (you ? '  *' : ''), x + 12, y + 20, ns, col, 'left');
+  // how he went, which is the half of a card people actually read
+  const how = c.how === 'dnb' ? '' : c.out ? c.how : 'not out';
+  const hs = fitText(how, w * 0.44, 15, '700');
+  Art.text(how, x + nameW + 18, y + 20, hs,
+           c.out ? 'rgba(255,255,255,0.62)' : 'rgba(120,220,150,0.75)', 'left', '700');
   Art.text(c.how === 'dnb' ? '—' : String(c.runs), x + w - 74, y + 20, 20, col, 'right');
   Art.text(c.how === 'dnb' ? '' : '(' + c.balls + ')', x + w - 12, y + 20, 16,
            'rgba(255,255,255,0.6)', 'right');
@@ -3682,7 +3988,8 @@ function cardRow(c, x, y, w, you) {
 function drawScorecard() {
   ctx.fillStyle = PAL.ink; ctx.fillRect(0, 0, VW, VH);
   const b = M.bat, w = M.bowl;
-  Art.text('SCORECARD', VW / 2, 54, 34, PAL.gold);
+  Art.text(M.ground + '   ·   ' + M.format.name + '   ·   ' + M.light.name,
+           VW / 2, 54, 24, PAL.gold);
 
   const colW = 596, left = VW / 2 - colW - 14, right = VW / 2 + 14;
   const head = (x, title, score) => {
@@ -3704,25 +4011,30 @@ function drawScorecard() {
     if (i % 2) { ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fillRect(right, y, colW, 28); }
     cardRow(c, right, y, colW, false);
   });
+  // extras, because a card without them does not add up
+  Art.text('EXTRAS', left + 12, 124 + 11 * 30 + 20, 16, 'rgba(255,255,255,0.55)', 'left');
+  Art.text(String(M.bat.extras || 0), left + colW - 74, 124 + 11 * 30 + 20, 18, PAL.white, 'right');
+  Art.text('EXTRAS', right + 12, 124 + 11 * 30 + 20, 16, 'rgba(255,255,255,0.55)', 'left');
+  Art.text(String(M.bowl.extras || 0), right + colW - 74, 124 + 11 * 30 + 20, 18, PAL.white, 'right');
 
   // your own two lines, pulled out
-  ctx.fillStyle = '#1c3f6e'; ctx.fillRect(left, 470, colW * 2 + 28, 56);
-  Art.text('YOU', left + 14, 506, 22, PAL.white, 'left');
+  ctx.fillStyle = '#1c3f6e'; ctx.fillRect(left, 490, colW * 2 + 28, 52);
+  Art.text('YOU', left + 14, 522, 22, PAL.white, 'left');
   Art.text('BATTING  ' + (b.balls === 0 ? 'DNB' : b.runs + ' (' + b.balls + ')'),
-           left + 130, 506, 22, PAL.gold, 'left');
+           left + 130, 522, 22, PAL.gold, 'left');
   const ov = Math.floor(w.balls / 6) + (w.balls % 6 ? '.' + (w.balls % 6) : '');
   Art.text('BOWLING  ' + (w.balls === 0 ? '—' : ov + '-0-' + w.runs + '-' + w.wickets),
-           left + 470, 506, 22, PAL.gold, 'left');
-  Art.text(M.style.name, left + colW * 2 + 14, 506, 18, 'rgba(255,255,255,0.7)', 'right');
+           left + 470, 522, 22, PAL.gold, 'left');
+  Art.text(M.style.name, left + colW * 2 + 14, 522, 18, 'rgba(255,255,255,0.7)', 'right');
 
-  Art.text('THEIR ATTACK', VW / 2, 560, 17, 'rgba(255,255,255,0.6)');
+  Art.text('THEIR ATTACK', VW / 2, 572, 17, 'rgba(255,255,255,0.6)');
   M.attack.forEach((a, i) => {
     const x = left + i * (colW * 2 + 28) / 4;
-    Art.text(a.name, x + 10, 588, 18, PAL.white, 'left');
-    Art.text(a.style.name, x + 10, 606, 14, 'rgba(255,255,255,0.55)', 'left');
+    Art.text(a.name, x + 10, 598, 18, PAL.white, 'left');
+    Art.text(a.style.name, x + 10, 616, 14, 'rgba(255,255,255,0.55)', 'left');
     const aov = Math.floor(a.balls / 6) + (a.balls % 6 ? '.' + (a.balls % 6) : '');
     Art.text(a.balls ? aov + '-0-' + a.runs + '-' + a.wickets : '—',
-             x + (colW * 2 + 28) / 4 - 20, 596, 19, PAL.gold, 'right');
+             x + (colW * 2 + 28) / 4 - 20, 606, 19, PAL.gold, 'right');
   });
 
   uiBtn(VW / 2 - 320, VH - 66, 300, 54, 'PLAY AGAIN', null, true);
@@ -3787,6 +4099,7 @@ function frame(ts) {
   Snd.tick();
   if (M.hitstop > 0) { M.hitstop -= dt; dt = 0; }   // contact is the reward
   Cam.update(dt);
+  Stumps.update(dt);
 
   if (Match.screen === 'match') {
     if (M.phase === 'bat') { Snd.intensity = M.swagger; Bat.update(dt); }
@@ -3810,6 +4123,8 @@ function frame(ts) {
   else if (Match.screen === 'break') drawBreak(dt);
   else if (Match.screen === 'result') drawResult();
   else if (Match.screen === 'card') drawScorecard();
+  else if (Match.screen === 'overs') drawOversScreen();
+  else if (Match.screen === 'intro') drawIntro(dt);
   else {
     drawScene();
     if (M.flash > 0) {
