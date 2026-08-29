@@ -868,6 +868,43 @@ Measured after, an accurate spell goes for 2.4–4.0 an over on easy, 3.4–5.5 
 medium and 4.7–6.4 on hard, and being accurate is worth about a run an over at
 every setting.
 
+### The field, from above — and setting one
+
+A ground has eleven men on it and from behind the batter you can see about
+four. Everything the fielding model does — the interception, the catch, the
+run — happens to positions the player cannot see, which makes a good shot and
+a bad one look identical until the number comes up.
+
+**The radar** is the missing half of the picture: a small circle in the top
+corner, the ground from above, with the striker at the bottom, the bowler at
+the top and the off side to the right — the same reading as the main camera,
+so the two agree without anybody having to translate. The thirty-yard ring is
+dashed, the pitch runs up the middle, and each man is a dot. It is on in both
+innings: batting, it is where the gaps are; bowling, it is where you have put
+everybody.
+
+**Setting a field** is the other half. While you have the ball, the radar is a
+button, and it opens a full-size version you drag men around on. Nine of them
+move; the keeper stands behind the stumps and the bowler is wherever his
+follow-through leaves him, so neither is draggable. Three sets to start from —
+ATTACKING, STANDARD, DEFENSIVE — and from there it is yours.
+
+Three rules make it a field rather than a drawing:
+
+- **A man goes where you put him, permanently.** Dragging moves his *home*,
+  which is the position the interception, catch and run models all read, so
+  the change is real rather than cosmetic and it lasts the innings.
+- **A man is called by where he stands.** Drag cover out to the midwicket rope
+  and he is deep midwicket now — which matters, because that name is what the
+  scorecard writes when he takes the catch.
+- **No more than two behind square on the leg side.** It is the one fielding
+  law worth having in an arcade game, because without it the obvious move is
+  to stack the leg side and dare them to hit there. Tried with all nine, two
+  are allowed and seven are refused, with the reason on screen. Square leg
+  gets a few degrees of grace so a man set square does not eat a slot.
+
+You cannot set the opposition's field, so while batting the radar is read-only.
+
 ### Where this departs from the document
 
 - **The flourish has no dedicated modifier button.** It fires on a full meter

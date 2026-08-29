@@ -477,6 +477,51 @@ const FIELDS = {
   club:   ['slip', 'point', 'cover', 'midOff', 'midOn', 'midwicket', 'squareLeg', 'fineLeg', 'thirdMan'],
   island: ['slip', 'gully', 'point', 'cover', 'midOff', 'midOn', 'midwicket', 'deepMidwicket', 'fineLeg'],
 };
+
+/* Fields you can actually set, as a captain would: everybody round the bat,
+   the standard ring, or the rope protected. Each is a starting point — the
+   field screen lets you drag any of the nine wherever you want them. */
+const FIELD_SETS = [
+  { key: 'attack', name: 'ATTACKING', blurb: 'Slips and catchers. Nothing saved.',
+    men: ['slip', 'gully', 'point', 'cover', 'extraCover', 'midOff', 'midOn',
+          'midwicket', 'shortFineLeg'] },
+  { key: 'standard', name: 'STANDARD', blurb: 'A ring, with two on the rope.',
+    men: ['slip', 'point', 'cover', 'midOff', 'midOn', 'midwicket', 'squareLeg',
+          'fineLeg', 'thirdMan'] },
+  { key: 'defend', name: 'DEFENSIVE', blurb: 'Sweepers out. Take the single.',
+    men: ['point', 'cover', 'midOff', 'midOn', 'midwicket', 'deepPoint', 'longOff',
+          'deepMidwicket', 'fineLeg'] },
+];
+
+/* The one fielding law worth having in an arcade game, because without it the
+   obvious move is to stack the leg side and dare them to hit there. */
+const LEG_SIDE_CAP = 2;
+const spotAngle = f => Math.atan2(-f.z, CONTACT_X - f.x) * 180 / Math.PI;
+/* A few degrees of grace, so a man set square does not eat one of the two
+   slots because his position was jittered half a degree round the corner. */
+const behindSquareLeg = f => f && !f.keeper && !f.bowler && spotAngle(f) > 96;
+const legSideCount = field => (field || []).filter(behindSquareLeg).length;
+
+/* What to call a man standing here. A fielder dragged from cover out to the
+   midwicket rope is not called cover any more — and the name is not cosmetic,
+   because it is what the scorecard writes when he takes the catch. */
+function nameForSpot(x, z) {
+  const R = boundaryR();
+  const a = Math.atan2(-z, CONTACT_X - x) * 180 / Math.PI;
+  const r = Math.hypot(x - CONTACT_X, z);
+  let best = 'midOff', bd = 1e9;
+  for (const k in POS) {
+    if (k === 'keeper') continue;
+    const p = POS[k];
+    const pr = p.deep ? p.r * R : p.r;
+    // angle matters more than depth, but depth is what separates cover from
+    // deep cover, so both count
+    const da = Math.abs(wrapPi(deg(p.a - a))) * 180 / Math.PI;
+    const d = da * 1.6 + Math.abs(pr - r);
+    if (d < bd) { bd = d; best = k; }
+  }
+  return { key: best, name: POS[best].name };
+}
 /* Where the Dossier's man goes when he has worked out your best zone. */
 const COVERING = [
   ['point', 'deepPoint', 'gully'],                 // CUT
@@ -1538,9 +1583,11 @@ function placeFielder(key, level, R) {
   return f;
 }
 
-function buildField(level, dossier) {
+function buildField(level, dossier, setKey) {
   const R = level.boundary;
-  const names = (M.format && FIELDS[M.format.field] ? FIELDS[M.format.field] : level.field).slice();
+  const preset = setKey && FIELD_SETS.find(s => s.key === setKey);
+  const names = preset ? preset.men.slice()
+    : (M.format && FIELDS[M.format.field] ? FIELDS[M.format.field] : level.field).slice();
   let flagged = null;
 
   if (level.dossier && dossier) {
@@ -2707,13 +2754,19 @@ const Bowl = {
 
     if (this.phase === 'setup') {
       const B = this.buttons();
+      const onRadar = p => Math.hypot(p.x - RADAR.cx, p.y - RADAR.cy) < RADAR.r + 8;
       let tap;
       while ((tap = Input.takeTap())) {
         if (this.inBtn(B.vari, tap)) { if (this.variUsable() || this.vari) this.vari = !this.vari; }
         else if (this.inBtn(B.bowl, tap)) { this.startRunup(); return; }
+        else if (M.mode !== 'batPractice' && onRadar(tap)) {
+          Match.screen = 'field'; Field.open(); return;
+        }
       }
-      // drag anywhere on the pitch to move the target
-      if (Input.down && Input.y < VH - TICKER.h - 92) {
+      // drag anywhere on the pitch to move the target — but not through the
+      // radar, which is a button in this phase
+      if (Input.down && Input.y < VH - TICKER.h - 92
+          && !onRadar({ x: Input.x, y: Input.y })) {
         const g = unprojectGround(Input.x, Input.y);
         if (g) {
           this.target.x = clamp(g.x, 10.4, 20.0);
@@ -4060,21 +4113,92 @@ function drawTicker() {
   ctx.strokeRect(0, VH - TICKER.h, VW, TICKER.h);
 }
 
+/* ===================== THE FIELD, FROM ABOVE =====================
+   A ground has eleven men on it and from behind the batter you can see about
+   four of them. The radar is the missing half of the picture: where the gaps
+   are while you are batting, and where you have put everybody while you are
+   bowling. Same projection both ways — the striker at the bottom, the bowler
+   at the top, the off side to the right, which is exactly how the main camera
+   already reads, so the two agree without anybody having to translate. */
+const RADAR = { r: 82, cx: 0, cy: 0 };
+
+/* World to radar. The centre of the circle is the middle of the pitch, which
+   is also what the boundary is measured from. */
+function radarPt(wx, wz, cx, cy, rr) {
+  const s = rr / boundaryR();
+  return { x: cx + wz * s, y: cy + (wx - PITCH_LEN / 2) * s };
+}
+/* And back, for dragging a man to where your thumb is. */
+function radarWorld(px, py, cx, cy, rr) {
+  const s = rr / boundaryR();
+  return { x: (py - cy) / s + PITCH_LEN / 2, z: (px - cx) / s };
+}
+
+function drawRadar(cx, cy, rr, opts) {
+  opts = opts || {};
+  const R = boundaryR();
+  ctx.save();
+  // the ground
+  ctx.beginPath(); ctx.arc(cx, cy, rr, 0, TAU);
+  ctx.fillStyle = 'rgba(20,32,20,0.86)'; ctx.fill();
+  ctx.strokeStyle = PAL.white; ctx.lineWidth = 2; ctx.stroke();
+  // the thirty-yard ring
+  ctx.beginPath(); ctx.arc(cx, cy, rr * 27.4 / R, 0, TAU);
+  ctx.strokeStyle = 'rgba(255,255,255,0.32)'; ctx.lineWidth = 1.5;
+  ctx.setLineDash([5, 5]); ctx.stroke(); ctx.setLineDash([]);
+  // the pitch, running up the middle
+  const a = radarPt(0, 0, cx, cy, rr), b = radarPt(PITCH_LEN, 0, cx, cy, rr);
+  const pw = Math.max(3, rr * 3.0 / R);
+  ctx.fillStyle = 'rgba(201,168,106,0.85)';
+  ctx.fillRect(cx - pw / 2, a.y, pw, b.y - a.y);
+
+  const dot = (p, col, size, ring) => {
+    ctx.beginPath(); ctx.arc(p.x, p.y, size, 0, TAU);
+    ctx.fillStyle = col; ctx.fill();
+    if (ring) { ctx.strokeStyle = ring; ctx.lineWidth = 2.5; ctx.stroke(); }
+  };
+  // the two batsmen and the bowler's mark, for orientation
+  dot(radarPt(CONTACT_X, 0, cx, cy, rr), PAL.white, Math.max(2.5, rr * 0.045));
+  dot(radarPt(FAR_CREASE_X, 0, cx, cy, rr), 'rgba(242,236,220,0.55)', Math.max(2, rr * 0.035));
+
+  (M.field || []).forEach(f => {
+    const p = radarPt(f.hx, f.hz, cx, cy, rr);
+    const sel = opts.selected === f;
+    const col = f.keeper ? '#9fd2ff' : f.bowler ? 'rgba(232,185,35,0.7)'
+              : f.flagged ? PAL.gold : PAL.maroonLite;
+    dot(p, col, Math.max(2.6, rr * (sel ? 0.062 : 0.048)), sel ? PAL.gold : null);
+    if (opts.names) {
+      Art.text(f.name, p.x, p.y - rr * 0.075, Math.max(9, rr * 0.052),
+               sel ? PAL.gold : 'rgba(255,255,255,0.7)', 'center', '700');
+    }
+  });
+  ctx.restore();
+}
+
 function drawHUD() {
   ctx.save();
   drawTicker();
+  // The field, from above, in the same corner in both innings.
+  RADAR.cx = VW - RADAR.r - 34; RADAR.cy = RADAR.r + 44;
+  drawRadar(RADAR.cx, RADAR.cy, RADAR.r);
   if (M.phase === 'bat') {
     drawMeter(40, 58, 300, 20, M.swagger, 'SWAGGER', M.swagger >= 0.999);
     if (M.swagger >= 0.999) Art.text('HOLD FOR THE FLOURISH', 40, 102, 17, PAL.gold, 'left');
     if (Bat.bowler) {
-      Art.text(Bat.bowler.style.name, VW - 40, 58, 19, PAL.gold, 'right');
+      Art.text(Bat.bowler.style.name, RADAR.cx, RADAR.cy + RADAR.r + 22, 17, PAL.gold);
     }
   } else {
     Art.text(M.style.name, 40, 58, 22, PAL.white, 'left');
-    Art.text('BATTER', VW - 178, 46, 15, 'rgba(255,255,255,0.75)', 'left');
-    ctx.fillStyle = 'rgba(0,0,0,0.40)'; ctx.fillRect(VW - 178, 54, 138, 12);
+    Art.text('BATTER', 40, 84, 15, 'rgba(255,255,255,0.75)', 'left');
+    ctx.fillStyle = 'rgba(0,0,0,0.40)'; ctx.fillRect(40, 92, 138, 12);
     ctx.fillStyle = M.batterConf > 0.55 ? '#5fd07a' : M.batterConf > 0.3 ? '#e8b923' : '#d0483f';
-    ctx.fillRect(VW - 178, 54, 138 * clamp(M.batterConf, 0, 1), 12);
+    ctx.fillRect(40, 92, 138 * clamp(M.batterConf, 0, 1), 12);
+    // and while you have the ball it is a button, because it is yours to set
+    if (Bowl.phase === 'setup' && M.mode !== 'batPractice') {
+      UI.hits.push({ x: RADAR.cx - RADAR.r, y: RADAR.cy - RADAR.r,
+                     w: RADAR.r * 2, h: RADAR.r * 2 + 30, id: 'RADAR' });
+      Art.text('TAP TO SET THE FIELD', RADAR.cx, RADAR.cy + RADAR.r + 22, 15, PAL.gold);
+    }
   }
   if (Chase.on && Chase.shown > 0) {
     Art.text(Chase.shown + (Chase.shown === 1 ? ' RUN' : ' RUNS'), VW / 2, VH - 96, 34, PAL.gold);
@@ -4443,6 +4567,116 @@ function drawTypingScreen(dt) {
   else if (id === 'KCLEAR') Typing.value = '';
   else if (id === 'KSPACE') Typing.put(' ');
   else if (id.length === 2 && id[0] === 'K') Typing.put(id[1]);
+}
+
+/* ===================== SETTING A FIELD =====================
+   Nine men you can put where you like, on the same radar the HUD draws. Drag
+   one and he stays there for the rest of the innings — his home moves, so the
+   fielding model, the catch model and the run model all read the new position
+   without knowing anything about this screen. The keeper and the bowler are
+   not draggable: one stands behind the stumps and the other is wherever his
+   follow-through leaves him. */
+const Field = {
+  sel: null, drag: null, note: '', noteT: 0, r: 236, cx: 0, cy: 0,
+
+  open() { this.sel = null; this.drag = null; this.note = ''; },
+  say(t) { this.note = t; this.noteT = now(); },
+
+  movable(f) { return f && !f.keeper && !f.bowler; },
+
+  /* Put a man down, if the law lets you. */
+  place(f, wx, wz) {
+    const R = boundaryR();
+    const d = Math.hypot(wx - PITCH_LEN / 2, wz);
+    // inside the rope, and not standing on the pitch with the batsman
+    const lim = Math.min(d, R - 1.5);
+    const k = d > 0.001 ? lim / d : 0;
+    let nx = PITCH_LEN / 2 + (wx - PITCH_LEN / 2) * k, nz = wz * k;
+    if (Math.hypot(nx - CONTACT_X, nz) < 5.5) {
+      const a = Math.atan2(nz, nx - CONTACT_X);
+      nx = CONTACT_X + Math.cos(a) * 5.5; nz = Math.sin(a) * 5.5;
+    }
+    const ox = f.x, oz = f.z;
+    f.x = nx; f.z = nz; f.hx = nx; f.hz = nz;
+    if (legSideCount(M.field) > LEG_SIDE_CAP) {
+      f.x = ox; f.z = oz; f.hx = ox; f.hz = oz;
+      this.say('ONLY ' + LEG_SIDE_CAP + ' BEHIND SQUARE ON THE LEG SIDE');
+      return false;
+    }
+    const spot = nameForSpot(nx, nz);
+    f.key = spot.key; f.name = spot.name;
+    return true;
+  },
+
+  preset(key) {
+    // A new field is a new set of objects, so anything holding on to one of
+    // the old men has to let go of it.
+    Catcher.clear(); Chase.stop();
+    M.field = buildField(M.level, null, key);
+    this.sel = null;
+    const set = FIELD_SETS.find(s => s.key === key);
+    this.say(set ? set.name + ' SET' : '');
+  },
+};
+
+function drawFieldScreen() {
+  drawScene();
+  ctx.fillStyle = 'rgba(8,10,16,0.80)'; ctx.fillRect(0, 0, VW, VH);
+  const cx = Field.cx = VW * 0.34, cy = Field.cy = VH * 0.53, rr = Field.r;
+
+  Art.text('SET THE FIELD', VW / 2, 62, 40, PAL.white);
+  Art.text('DRAG A FIELDER. THE KEEPER AND THE BOWLER STAY WHERE THEY ARE.',
+           VW / 2, 92, 16, 'rgba(255,255,255,0.65)');
+
+  // dragging
+  const p = { x: Input.x, y: Input.y };
+  if (Input.down) {
+    if (!Field.drag) {
+      let best = null, bd = 34;
+      (M.field || []).forEach(f => {
+        if (!Field.movable(f)) return;
+        const q = radarPt(f.hx, f.hz, cx, cy, rr);
+        const d = Math.hypot(q.x - p.x, q.y - p.y);
+        if (d < bd) { bd = d; best = f; }
+      });
+      if (best) { Field.drag = best; Field.sel = best; }
+    }
+    if (Field.drag) {
+      const w = radarWorld(p.x, p.y, cx, cy, rr);
+      Field.place(Field.drag, w.x, w.z);
+    }
+  } else { Field.drag = null; }
+
+  drawRadar(cx, cy, rr, { names: true, selected: Field.sel });
+
+  // which way is which, so the radar is readable without a legend
+  Art.text('OFF SIDE', cx + rr - 6, cy - 8, 14, 'rgba(255,255,255,0.45)', 'right');
+  Art.text('LEG SIDE', cx - rr + 6, cy - 8, 14, 'rgba(255,255,255,0.45)', 'left');
+  Art.text('BOWLER', cx, cy - rr - 10, 14, 'rgba(255,255,255,0.5)');
+  Art.text('STRIKER', cx, cy + rr + 22, 14, 'rgba(255,255,255,0.5)');
+
+  const x = VW * 0.68, w = 380;
+  Art.text('A SET FIELD', x + w / 2, 168, 18, 'rgba(255,255,255,0.7)');
+  FIELD_SETS.forEach((set, i) => {
+    uiBtn(x, 182 + i * 84, w, 72, set.name, set.blurb, false, 'SET' + set.key);
+  });
+  const leg = legSideCount(M.field);
+  Art.text('BEHIND SQUARE ON THE LEG SIDE:  ' + leg + ' of ' + LEG_SIDE_CAP,
+           x + w / 2, 470, 17, leg > LEG_SIDE_CAP ? '#d0483f' : 'rgba(255,255,255,0.75)',
+           'center', '700');
+  if (Field.note && now() - Field.noteT < 2.2) {
+    Art.text(Field.note, x + w / 2, 500, 17, PAL.gold, 'center', '700');
+  }
+  if (Field.sel) {
+    Art.text(Field.sel.name, x + w / 2, 534, 26, PAL.gold);
+  }
+
+  uiBtn(x, VH - 132, w, 62, 'BOWL', null, true, 'FDONE');
+
+  const id = uiTake();
+  if (!id) return;
+  if (id === 'FDONE') { Match.screen = 'match'; Input.flush(); }
+  else if (id.indexOf('SET') === 0) Field.preset(id.slice(3));
 }
 
 /* ===================== LEADERBOARD ===================== */
@@ -4867,6 +5101,7 @@ function frame(ts) {
   else if (Match.screen === 'card') drawScorecard();
   else if (Match.screen === 'overs') drawOversScreen();
   else if (Match.screen === 'overEnd') drawOverEnd(dt);
+  else if (Match.screen === 'field') drawFieldScreen();
   else if (Match.screen === 'runout') drawRunOut(dt);
   else if (Match.screen === 'intro') drawIntro(dt);
   else {
